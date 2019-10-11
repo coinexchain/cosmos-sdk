@@ -985,8 +985,9 @@ func verifySigAsync(sigVerifyDataArr []auth.SigVerifyData, ch chan<- bool, simul
 			for _, data := range sigVerifyDataArr {
 				if !data.SignerAcc.GetPubKey().VerifyBytes(data.SignBytes, data.Signature) {
 					ch <- false
-					break
+					return
 				}
+				ch <- true
 			}
 		}()
 	}
