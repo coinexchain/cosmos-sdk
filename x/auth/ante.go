@@ -32,6 +32,12 @@ func init() {
 // and also to accept or reject different types of PubKey's. This is where apps can define their own PubKey
 type SignatureVerificationGasConsumer = func(meter sdk.GasMeter, sig []byte, pubkey crypto.PubKey, params Params) sdk.Result
 
+type SigVerifyData struct {
+	SignerAcc Account
+	SignBytes []byte
+	Signature []byte
+}
+
 // NewAnteHandler returns an AnteHandler that checks and increments sequence
 // numbers, checks signatures & account numbers, and deducts fees from the first
 // signer.
@@ -131,6 +137,7 @@ func NewAnteHandler(ak AccountKeeper, supplyKeeper types.SupplyKeeper, sigGasCon
 		// When simulating, this would just be a 0-length slice.
 		stdSigs := stdTx.GetSignatures()
 
+		sigVerifyDataArr := make([]SigVerifyData, len(stdSigs))
 		for i := 0; i < len(stdSigs); i++ {
 			// skip the fee payer, account is cached and fees were deducted already
 			if i != 0 {
@@ -148,7 +155,13 @@ func NewAnteHandler(ak AccountKeeper, supplyKeeper types.SupplyKeeper, sigGasCon
 			}
 
 			ak.SetAccount(newCtx, signerAccs[i])
+
+			sigVerifyDataArr[i] = SigVerifyData{SignerAcc: signerAccs[i], SignBytes: signBytes, Signature: stdSigs[i].Signature}
+			//if !simulate && !signerAccs[i].GetPubKey().VerifyBytes(signBytes, stdSigs[i].Signature) {
+			//	return newCtx, sdk.ErrUnauthorized("signature verification failed; verify correct account sequence and chain-id").Result(), true
+			//}
 		}
+		newCtx = newCtx.WithValue("sigVerifyDataArr", sigVerifyDataArr)
 
 		// TODO: tx tags (?)
 		return newCtx, sdk.Result{GasWanted: stdTx.Fee.Gas}, false // continue...
@@ -226,9 +239,9 @@ func processSig(
 		return nil, res
 	}
 
-	if !simulate && !pubKey.VerifyBytes(signBytes, sig.Signature) {
-		return nil, sdk.ErrUnauthorized("signature verification failed; verify correct account sequence and chain-id").Result()
-	}
+	//if !simulate && !pubKey.VerifyBytes(signBytes, sig.Signature) {
+	//	return nil, sdk.ErrUnauthorized("signature verification failed; verify correct account sequence and chain-id").Result()
+	//}
 
 	if err := acc.SetSequence(acc.GetSequence() + 1); err != nil {
 		panic(err)

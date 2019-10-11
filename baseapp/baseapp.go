@@ -21,6 +21,7 @@ import (
 	"github.com/cosmos/cosmos-sdk/codec"
 	"github.com/cosmos/cosmos-sdk/store"
 	sdk "github.com/cosmos/cosmos-sdk/types"
+	"github.com/cosmos/cosmos-sdk/x/auth"
 )
 
 // Key to store the consensus params in the main store.
@@ -912,6 +913,7 @@ func (app *BaseApp) runTx(mode runTxMode, txBytes []byte, tx sdk.Tx) (result sdk
 		return err.Result()
 	}
 
+	var sigVerifyDataArr []auth.SigVerifyData
 	if app.anteHandler != nil {
 		var anteCtx sdk.Context
 		var msCache sdk.CacheMultiStore
@@ -944,13 +946,23 @@ func (app *BaseApp) runTx(mode runTxMode, txBytes []byte, tx sdk.Tx) (result sdk
 		}
 
 		msCache.Write()
+		sigVerifyDataArr = newCtx.Value("sigVerifyDataArr").([]auth.SigVerifyData)
 	}
+
+	verifySigChan := make(chan bool)
+	verifySigAsync(sigVerifyDataArr, verifySigChan, mode == runTxModeSimulate)
 
 	// Create a new context based off of the existing context with a cache wrapped
 	// multi-store in case message processing fails.
 	runMsgCtx, msCache := app.cacheTxContext(ctx, txBytes)
 	result = app.runMsgs(runMsgCtx, msgs, mode)
 	result.GasWanted = gasWanted
+
+	verifySigOK := <-verifySigChan
+	close(verifySigChan)
+	if !verifySigOK {
+		sdk.ErrUnauthorized("signature verification failed; verify correct account sequence and chain-id").Result()
+	}
 
 	// Safety check: don't write the cache state unless we're in DeliverTx.
 	if mode != runTxModeDeliver {
@@ -963,6 +975,21 @@ func (app *BaseApp) runTx(mode runTxMode, txBytes []byte, tx sdk.Tx) (result sdk
 	}
 
 	return result
+}
+
+func verifySigAsync(sigVerifyDataArr []auth.SigVerifyData, ch chan<- bool, simulate bool) {
+	if simulate {
+		ch <- true
+	} else {
+		go func() {
+			for _, data := range sigVerifyDataArr {
+				if !data.SignerAcc.GetPubKey().VerifyBytes(data.SignBytes, data.Signature) {
+					ch <- false
+					break
+				}
+			}
+		}()
+	}
 }
 
 // EndBlock implements the ABCI interface.
