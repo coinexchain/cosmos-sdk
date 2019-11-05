@@ -423,6 +423,8 @@ func (iter *iavlIterator) Value() []byte {
 // Implements types.Iterator.
 func (iter *iavlIterator) Close() {
 	close(iter.quitCh)
+	// wait iter.iterCh to close
+	for range iter.iterCh {}
 }
 
 //----------------------------------------
