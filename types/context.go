@@ -8,6 +8,7 @@ import (
 	abci "github.com/tendermint/tendermint/abci/types"
 	"github.com/tendermint/tendermint/libs/log"
 
+	"github.com/cosmos/cosmos-sdk/store/gaskv"
 	stypes "github.com/cosmos/cosmos-sdk/store/types"
 )
 
@@ -196,15 +197,12 @@ func (c Context) Value(key interface{}) interface{} {
 
 // KVStore fetches a KVStore from the MultiStore.
 func (c Context) KVStore(key StoreKey) KVStore {
-	//return gaskv.NewStore(c.MultiStore().GetKVStore(key), c.GasMeter(), stypes.KVGasConfig())
-	return c.MultiStore().GetKVStore(key)
-
+	return gaskv.NewStore(c.MultiStore().GetKVStore(key), c.GasMeter(), stypes.GasConfig{})
 }
 
 // TransientStore fetches a TransientStore from the MultiStore.
 func (c Context) TransientStore(key StoreKey) KVStore {
-	//return gaskv.NewStore(c.MultiStore().GetKVStore(key), c.GasMeter(), stypes.TransientGasConfig())
-	return c.MultiStore().GetKVStore(key)
+	return gaskv.NewStore(c.MultiStore().GetKVStore(key), c.GasMeter(), stypes.GasConfig{})
 }
 
 // CacheContext returns a new Context with the multi-store cached and a new
