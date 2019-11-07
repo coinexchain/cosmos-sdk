@@ -20,24 +20,23 @@ var (
 	_ module.AppModuleBasic   = AppModuleBasic{}
 )
 
-// AppModuleBasic defines the basic application module used by the genutil module.
+// app module basics object
 type AppModuleBasic struct{}
 
-// Name returns the genutil module's name.
+// module name
 func (AppModuleBasic) Name() string {
 	return ModuleName
 }
 
-// RegisterCodec registers the genutil module's types for the given codec.
+// register module codec
 func (AppModuleBasic) RegisterCodec(cdc *codec.Codec) {}
 
-// DefaultGenesis returns default genesis state as raw bytes for the genutil
-// module.
+// default genesis state
 func (AppModuleBasic) DefaultGenesis() json.RawMessage {
 	return ModuleCdc.MustMarshalJSON(GenesisState{})
 }
 
-// ValidateGenesis performs genesis state validation for the genutil module.
+// module validate genesis
 func (AppModuleBasic) ValidateGenesis(bz json.RawMessage) error {
 	var data GenesisState
 	err := ModuleCdc.UnmarshalJSON(bz, &data)
@@ -47,21 +46,19 @@ func (AppModuleBasic) ValidateGenesis(bz json.RawMessage) error {
 	return ValidateGenesis(data)
 }
 
-// RegisterRESTRoutes registers the REST routes for the genutil module.
+// register rest routes
 func (AppModuleBasic) RegisterRESTRoutes(_ context.CLIContext, _ *mux.Router) {}
 
-// GetTxCmd returns no root tx command for the genutil module.
+// get the root tx command of this module
 func (AppModuleBasic) GetTxCmd(_ *codec.Codec) *cobra.Command { return nil }
 
-// GetQueryCmd returns no root query command for the genutil module.
+// get the root query command of this module
 func (AppModuleBasic) GetQueryCmd(_ *codec.Codec) *cobra.Command { return nil }
 
-//____________________________________________________________________________
-
-// AppModule implements an application module for the genutil module.
+//___________________________
+// app module
 type AppModule struct {
 	AppModuleBasic
-
 	accountKeeper types.AccountKeeper
 	stakingKeeper types.StakingKeeper
 	deliverTx     deliverTxfn
@@ -79,16 +76,14 @@ func NewAppModule(accountKeeper types.AccountKeeper,
 	})
 }
 
-// InitGenesis performs genesis initialization for the genutil module. It returns
-// no validator updates.
+// module init-genesis
 func (am AppModule) InitGenesis(ctx sdk.Context, data json.RawMessage) []abci.ValidatorUpdate {
 	var genesisState GenesisState
 	ModuleCdc.MustUnmarshalJSON(data, &genesisState)
 	return InitGenesis(ctx, ModuleCdc, am.stakingKeeper, am.deliverTx, genesisState)
 }
 
-// ExportGenesis returns the exported genesis state as raw bytes for the genutil
-// module.
+// module export genesis
 func (am AppModule) ExportGenesis(ctx sdk.Context) json.RawMessage {
 	return nil
 }

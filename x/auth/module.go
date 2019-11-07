@@ -2,7 +2,6 @@ package auth
 
 import (
 	"encoding/json"
-	"math/rand"
 
 	"github.com/gorilla/mux"
 	"github.com/spf13/cobra"
@@ -14,37 +13,33 @@ import (
 	"github.com/cosmos/cosmos-sdk/types/module"
 	"github.com/cosmos/cosmos-sdk/x/auth/client/cli"
 	"github.com/cosmos/cosmos-sdk/x/auth/client/rest"
-	"github.com/cosmos/cosmos-sdk/x/auth/simulation"
 	"github.com/cosmos/cosmos-sdk/x/auth/types"
-	sim "github.com/cosmos/cosmos-sdk/x/simulation"
 )
 
 var (
-	_ module.AppModule           = AppModule{}
-	_ module.AppModuleBasic      = AppModuleBasic{}
-	_ module.AppModuleSimulation = AppModuleSimulation{}
+	_ module.AppModule      = AppModule{}
+	_ module.AppModuleBasic = AppModuleBasic{}
 )
 
-// AppModuleBasic defines the basic application module used by the auth module.
+// app module basics object
 type AppModuleBasic struct{}
 
-// Name returns the auth module's name.
+// module name
 func (AppModuleBasic) Name() string {
 	return types.ModuleName
 }
 
-// RegisterCodec registers the auth module's types for the given codec.
+// register module codec
 func (AppModuleBasic) RegisterCodec(cdc *codec.Codec) {
 	types.RegisterCodec(cdc)
 }
 
-// DefaultGenesis returns default genesis state as raw bytes for the auth
-// module.
+// default genesis state
 func (AppModuleBasic) DefaultGenesis() json.RawMessage {
 	return types.ModuleCdc.MustMarshalJSON(types.DefaultGenesisState())
 }
 
-// ValidateGenesis performs genesis state validation for the auth module.
+// module validate genesis
 func (AppModuleBasic) ValidateGenesis(bz json.RawMessage) error {
 	var data types.GenesisState
 	err := types.ModuleCdc.UnmarshalJSON(bz, &data)
@@ -54,86 +49,61 @@ func (AppModuleBasic) ValidateGenesis(bz json.RawMessage) error {
 	return types.ValidateGenesis(data)
 }
 
-// RegisterRESTRoutes registers the REST routes for the auth module.
+// register rest routes
 func (AppModuleBasic) RegisterRESTRoutes(ctx context.CLIContext, rtr *mux.Router) {
 	rest.RegisterRoutes(ctx, rtr, types.StoreKey)
 }
 
-// GetTxCmd returns the root tx command for the auth module.
+// get the root tx command of this module
 func (AppModuleBasic) GetTxCmd(cdc *codec.Codec) *cobra.Command {
 	return cli.GetTxCmd(cdc)
 }
 
-// GetQueryCmd returns the root query command for the auth module.
+// get the root query command of this module
 func (AppModuleBasic) GetQueryCmd(cdc *codec.Codec) *cobra.Command {
 	return cli.GetQueryCmd(cdc)
 }
 
-//____________________________________________________________________________
-
-// AppModuleSimulation defines the module simulation functions used by the auth module.
-type AppModuleSimulation struct{}
-
-// RegisterStoreDecoder registers a decoder for auth module's types
-func (AppModuleSimulation) RegisterStoreDecoder(sdr sdk.StoreDecoderRegistry) {
-	sdr[StoreKey] = simulation.DecodeStore
-}
-
-// GenerateGenesisState creates a randomized GenState of the auth module
-func (AppModuleSimulation) GenerateGenesisState(simState *module.SimulationState) {
-	simulation.RandomizedGenState(simState)
-}
-
-// RandomizedParams creates randomized auth param changes for the simulator.
-func (AppModuleSimulation) RandomizedParams(r *rand.Rand) []sim.ParamChange {
-	return simulation.ParamChanges(r)
-}
-
-//____________________________________________________________________________
-
-// AppModule implements an application module for the auth module.
+//___________________________
+// app module object
 type AppModule struct {
 	AppModuleBasic
-	AppModuleSimulation
-
 	accountKeeper AccountKeeper
 }
 
 // NewAppModule creates a new AppModule object
 func NewAppModule(accountKeeper AccountKeeper) AppModule {
 	return AppModule{
-		AppModuleBasic:      AppModuleBasic{},
-		AppModuleSimulation: AppModuleSimulation{},
-		accountKeeper:       accountKeeper,
+		AppModuleBasic: AppModuleBasic{},
+		accountKeeper:  accountKeeper,
 	}
 }
 
-// Name returns the auth module's name.
+// module name
 func (AppModule) Name() string {
 	return types.ModuleName
 }
 
-// RegisterInvariants performs a no-op.
+// register invariants
 func (AppModule) RegisterInvariants(_ sdk.InvariantRegistry) {}
 
-// Route returns the message routing key for the auth module.
+// module message route name
 func (AppModule) Route() string { return "" }
 
-// NewHandler returns an sdk.Handler for the auth module.
+// module handler
 func (AppModule) NewHandler() sdk.Handler { return nil }
 
-// QuerierRoute returns the auth module's querier route name.
+// module querier route name
 func (AppModule) QuerierRoute() string {
 	return types.QuerierRoute
 }
 
-// NewQuerierHandler returns the auth module sdk.Querier.
+// module querier
 func (am AppModule) NewQuerierHandler() sdk.Querier {
 	return NewQuerier(am.accountKeeper)
 }
 
-// InitGenesis performs genesis initialization for the auth module. It returns
-// no validator updates.
+// module init-genesis
 func (am AppModule) InitGenesis(ctx sdk.Context, data json.RawMessage) []abci.ValidatorUpdate {
 	var genesisState GenesisState
 	types.ModuleCdc.MustUnmarshalJSON(data, &genesisState)
@@ -141,18 +111,16 @@ func (am AppModule) InitGenesis(ctx sdk.Context, data json.RawMessage) []abci.Va
 	return []abci.ValidatorUpdate{}
 }
 
-// ExportGenesis returns the exported genesis state as raw bytes for the auth
-// module.
+// module export genesis
 func (am AppModule) ExportGenesis(ctx sdk.Context) json.RawMessage {
 	gs := ExportGenesis(ctx, am.accountKeeper)
 	return types.ModuleCdc.MustMarshalJSON(gs)
 }
 
-// BeginBlock returns the begin blocker for the auth module.
+// module begin-block
 func (AppModule) BeginBlock(_ sdk.Context, _ abci.RequestBeginBlock) {}
 
-// EndBlock returns the end blocker for the auth module. It returns no validator
-// updates.
+// module end-block
 func (AppModule) EndBlock(_ sdk.Context, _ abci.RequestEndBlock) []abci.ValidatorUpdate {
 	return []abci.ValidatorUpdate{}
 }

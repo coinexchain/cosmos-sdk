@@ -9,8 +9,6 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/pkg/errors"
-
 	"github.com/spf13/cobra"
 	flag "github.com/spf13/pflag"
 	"github.com/spf13/viper"
@@ -65,7 +63,7 @@ func GenTxCmd(ctx *server.Context, cdc *codec.Codec, mbm module.BasicManager, sm
 			config.SetRoot(viper.GetString(client.FlagHome))
 			nodeID, valPubKey, err := genutil.InitializeNodeValidatorFiles(ctx.Config)
 			if err != nil {
-				return errors.Wrap(err, "failed to initialize node validator files")
+				return err
 			}
 
 			// Read --nodeID, if empty take it from priv_validator.json
@@ -76,33 +74,33 @@ func GenTxCmd(ctx *server.Context, cdc *codec.Codec, mbm module.BasicManager, sm
 			if valPubKeyString := viper.GetString(flagPubKey); valPubKeyString != "" {
 				valPubKey, err = sdk.GetConsPubKeyBech32(valPubKeyString)
 				if err != nil {
-					return errors.Wrap(err, "failed to get consensus node public key")
+					return err
 				}
 			}
 
 			genDoc, err := tmtypes.GenesisDocFromFile(config.GenesisFile())
 			if err != nil {
-				return errors.Wrapf(err, "failed to read genesis doc file %s", config.GenesisFile())
+				return err
 			}
 
 			var genesisState map[string]json.RawMessage
 			if err = cdc.UnmarshalJSON(genDoc.AppState, &genesisState); err != nil {
-				return errors.Wrap(err, "failed to unmarshal genesis state")
+				return err
 			}
 
 			if err = mbm.ValidateGenesis(genesisState); err != nil {
-				return errors.Wrap(err, "failed to validate genesis state")
+				return err
 			}
 
 			kb, err := client.NewKeyBaseFromDir(viper.GetString(flagClientHome))
 			if err != nil {
-				return errors.Wrap(err, "failed to initialize keybase")
+				return err
 			}
 
 			name := viper.GetString(client.FlagName)
 			key, err := kb.Get(name)
 			if err != nil {
-				return errors.Wrap(err, "failed to read from keybase")
+				return err
 			}
 
 			// Set flags for creating gentx
@@ -113,12 +111,12 @@ func GenTxCmd(ctx *server.Context, cdc *codec.Codec, mbm module.BasicManager, sm
 			amount := viper.GetString(flagAmount)
 			coins, err := sdk.ParseCoins(amount)
 			if err != nil {
-				return errors.Wrap(err, "failed to parse coins")
+				return err
 			}
 
 			err = genutil.ValidateAccountInGenesis(genesisState, genAccIterator, key.GetAddress(), coins, cdc)
 			if err != nil {
-				return errors.Wrap(err, "failed to validate account in genesis")
+				return err
 			}
 
 			txBldr := auth.NewTxBuilderFromCLI().WithTxEncoder(utils.GetTxEncoder(cdc))
@@ -134,12 +132,12 @@ func GenTxCmd(ctx *server.Context, cdc *codec.Codec, mbm module.BasicManager, sm
 			// create a 'create-validator' message
 			txBldr, msg, err := smbh.BuildCreateValidatorMsg(cliCtx, txBldr)
 			if err != nil {
-				return errors.Wrap(err, "failed to build create-validator message")
+				return err
 			}
 
 			info, err := txBldr.Keybase().Get(name)
 			if err != nil {
-				return errors.Wrap(err, "failed to read from tx builder keybase")
+				return err
 			}
 
 			if info.GetType() == kbkeys.TypeOffline || info.GetType() == kbkeys.TypeMulti {
@@ -152,19 +150,19 @@ func GenTxCmd(ctx *server.Context, cdc *codec.Codec, mbm module.BasicManager, sm
 			cliCtx = cliCtx.WithOutput(w)
 
 			if err = utils.PrintUnsignedStdTx(txBldr, cliCtx, []sdk.Msg{msg}); err != nil {
-				return errors.Wrap(err, "failed to print unsigned std tx")
+				return err
 			}
 
 			// read the transaction
 			stdTx, err := readUnsignedGenTxFile(cdc, w)
 			if err != nil {
-				return errors.Wrap(err, "failed to read unsigned gen tx file")
+				return err
 			}
 
 			// sign the transaction and write it to the output file
 			signedTx, err := utils.SignStdTx(txBldr, cliCtx, name, stdTx, false, true)
 			if err != nil {
-				return errors.Wrap(err, "failed to sign std tx")
+				return err
 			}
 
 			// Fetch output file name
@@ -172,12 +170,12 @@ func GenTxCmd(ctx *server.Context, cdc *codec.Codec, mbm module.BasicManager, sm
 			if outputDocument == "" {
 				outputDocument, err = makeOutputFilepath(config.RootDir, nodeID)
 				if err != nil {
-					return errors.Wrap(err, "failed to create output file path")
+					return err
 				}
 			}
 
 			if err := writeSignedGenTx(cdc, outputDocument, signedTx); err != nil {
-				return errors.Wrap(err, "failed to write signed gen tx")
+				return err
 			}
 
 			fmt.Fprintf(os.Stderr, "Genesis transaction written to %q\n", outputDocument)

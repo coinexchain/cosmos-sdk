@@ -19,5 +19,4 @@ func RegisterTxRoutes(cliCtx context.CLIContext, r *mux.Router) {
 	r.HandleFunc("/txs", QueryTxsRequestHandlerFn(cliCtx)).Methods("GET")
 	r.HandleFunc("/txs", BroadcastTxRequest(cliCtx)).Methods("POST")
 	r.HandleFunc("/txs/encode", EncodeTxRequestHandlerFn(cliCtx)).Methods("POST")
-	r.HandleFunc("/txs/decode", DecodeTxRequestHandlerFn(cliCtx)).Methods("POST")
 }

@@ -8,9 +8,10 @@ import (
 	"fmt"
 	"strings"
 
+	"gopkg.in/yaml.v2"
+
 	"github.com/tendermint/tendermint/crypto"
 	cryptoAmino "github.com/tendermint/tendermint/crypto/encoding/amino"
-	yaml "gopkg.in/yaml.v2"
 
 	"github.com/tendermint/tendermint/libs/bech32"
 )
@@ -119,7 +120,7 @@ func VerifyAddressFormat(bz []byte) error {
 		return verifier(bz)
 	}
 	if len(bz) != AddrLen {
-		return errors.New("incorrect address length")
+		return errors.New("Incorrect address length")
 	}
 	return nil
 }

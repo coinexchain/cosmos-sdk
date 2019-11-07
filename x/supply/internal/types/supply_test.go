@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"testing"
 
-	yaml "gopkg.in/yaml.v2"
+	"gopkg.in/yaml.v2"
 
 	sdk "github.com/cosmos/cosmos-sdk/types"
 

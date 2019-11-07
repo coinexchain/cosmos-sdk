@@ -1,38 +1,56 @@
-package keeper_test
+package keeper
 
 import (
 	"testing"
 
 	"github.com/stretchr/testify/require"
-	abci "github.com/tendermint/tendermint/abci/types"
+	"github.com/tendermint/tendermint/libs/log"
 
+	"github.com/cosmos/cosmos-sdk/codec"
 	sdk "github.com/cosmos/cosmos-sdk/types"
+	"github.com/cosmos/cosmos-sdk/x/crisis/internal/types"
+	"github.com/cosmos/cosmos-sdk/x/params"
 )
 
-func TestLogger(t *testing.T) {
-	app := createTestApp()
+func testPassingInvariant(_ sdk.Context) (string, bool) {
+	return "", false
+}
 
-	ctx := app.NewContext(true, abci.Header{})
-	require.Equal(t, ctx.Logger(), app.CrisisKeeper.Logger(ctx))
+func testFailingInvariant(_ sdk.Context) (string, bool) {
+	return "", true
+}
+
+func testKeeper(checkPeriod uint) Keeper {
+	cdc := codec.New()
+	paramsKeeper := params.NewKeeper(
+		cdc, sdk.NewKVStoreKey(params.StoreKey), sdk.NewTransientStoreKey(params.TStoreKey), params.DefaultCodespace,
+	)
+
+	return NewKeeper(paramsKeeper.Subspace(types.DefaultParamspace), checkPeriod, nil, "test")
+}
+
+func TestLogger(t *testing.T) {
+	k := testKeeper(5)
+
+	ctx := sdk.Context{}.WithLogger(log.NewNopLogger())
+	require.Equal(t, ctx.Logger(), k.Logger(ctx))
 }
 
 func TestInvariants(t *testing.T) {
-	app := createTestApp()
-	require.Equal(t, app.CrisisKeeper.InvCheckPeriod(), uint(5))
+	k := testKeeper(5)
+	require.Equal(t, k.InvCheckPeriod(), uint(5))
 
-	// SimApp has 11 registered invariants
-	orgInvRoutes := app.CrisisKeeper.Routes()
-	app.CrisisKeeper.RegisterRoute("testModule", "testRoute", func(sdk.Context) (string, bool) { return "", false })
-	require.Equal(t, len(app.CrisisKeeper.Routes()), len(orgInvRoutes)+1)
+	k.RegisterRoute("testModule", "testRoute", testPassingInvariant)
+	require.Len(t, k.Routes(), 1)
 }
 
 func TestAssertInvariants(t *testing.T) {
-	app := createTestApp()
-	ctx := app.NewContext(true, abci.Header{})
+	k := testKeeper(5)
+	ctx := sdk.Context{}.WithLogger(log.NewNopLogger())
 
-	app.CrisisKeeper.RegisterRoute("testModule", "testRoute1", func(sdk.Context) (string, bool) { return "", false })
-	require.NotPanics(t, func() { app.CrisisKeeper.AssertInvariants(ctx) })
+	k.RegisterRoute("testModule", "testRoute1", testPassingInvariant)
+	require.NotPanics(t, func() { k.AssertInvariants(ctx) })
 
-	app.CrisisKeeper.RegisterRoute("testModule", "testRoute2", func(sdk.Context) (string, bool) { return "", true })
-	require.Panics(t, func() { app.CrisisKeeper.AssertInvariants(ctx) })
+	k.RegisterRoute("testModule", "testRoute2", testFailingInvariant)
+	require.Panics(t, func() { k.AssertInvariants(ctx) })
 }

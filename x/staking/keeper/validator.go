@@ -187,7 +187,7 @@ func (k Keeper) RemoveValidator(ctx sdk.Context, address sdk.ValAddress) {
 	if validator.Tokens.IsPositive() {
 		panic("attempting to remove a validator which still contains tokens")
 	}
-	if validator.Tokens.IsPositive() {
+	if validator.Tokens.GT(sdk.ZeroInt()) {
 		panic("validator being removed should never have positive tokens")
 	}
 
@@ -235,10 +235,11 @@ func (k Keeper) GetValidators(ctx sdk.Context, maxRetrieve uint16) (validators [
 
 // get the current group of bonded validators sorted by power-rank
 func (k Keeper) GetBondedValidatorsByPower(ctx sdk.Context) []types.Validator {
+	store := ctx.KVStore(k.storeKey)
 	maxValidators := k.MaxValidators(ctx)
 	validators := make([]types.Validator, maxValidators)
 
-	iterator := k.ValidatorsPowerStoreIterator(ctx)
+	iterator := sdk.KVStoreReversePrefixIterator(store, types.ValidatorsByPowerIndexKey)
 	defer iterator.Close()
 
 	i := 0
@@ -255,9 +256,10 @@ func (k Keeper) GetBondedValidatorsByPower(ctx sdk.Context) []types.Validator {
 }
 
 // returns an iterator for the current validator power store
-func (k Keeper) ValidatorsPowerStoreIterator(ctx sdk.Context) sdk.Iterator {
+func (k Keeper) ValidatorsPowerStoreIterator(ctx sdk.Context) (iterator sdk.Iterator) {
 	store := ctx.KVStore(k.storeKey)
-	return sdk.KVStoreReversePrefixIterator(store, types.ValidatorsByPowerIndexKey)
+	iterator = sdk.KVStoreReversePrefixIterator(store, types.ValidatorsByPowerIndexKey)
+	return iterator
 }
 
 //_______________________________________________________________________
@@ -368,8 +370,13 @@ func (k Keeper) DeleteValidatorQueueTimeSlice(ctx sdk.Context, timestamp time.Ti
 // Insert an validator address to the appropriate timeslice in the validator queue
 func (k Keeper) InsertValidatorQueue(ctx sdk.Context, val types.Validator) {
 	timeSlice := k.GetValidatorQueueTimeSlice(ctx, val.UnbondingCompletionTime)
-	timeSlice = append(timeSlice, val.OperatorAddress)
-	k.SetValidatorQueueTimeSlice(ctx, val.UnbondingCompletionTime, timeSlice)
+	var keys []sdk.ValAddress
+	if len(timeSlice) == 0 {
+		keys = []sdk.ValAddress{val.OperatorAddress}
+	} else {
+		keys = append(timeSlice, val.OperatorAddress)
+	}
+	k.SetValidatorQueueTimeSlice(ctx, val.UnbondingCompletionTime, keys)
 }
 
 // Delete a validator address from the validator queue

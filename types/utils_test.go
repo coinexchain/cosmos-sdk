@@ -31,7 +31,6 @@ func TestSortJSON(t *testing.T) {
 	}
 
 	for tcIndex, tc := range cases {
-		tc := tc
 		got, err := SortJSON([]byte(tc.unsortedJSON))
 		if tc.wantErr {
 			require.NotNil(t, err, "tc #%d", tcIndex)
@@ -56,7 +55,6 @@ func TestTimeFormatAndParse(t *testing.T) {
 		{"2011-01-10T23:10:05.758230235Z", "2011-01-10T23:10:05.758230235", true},
 	}
 	for _, tc := range cases {
-		tc := tc
 		timeFromRFC, err := time.Parse(time.RFC3339Nano, tc.RFC3339NanoStr)
 		require.Nil(t, err)
 		timeFromSDKFormat, err := time.Parse(SortableTimeFormat, tc.SDKSortableTimeStr)

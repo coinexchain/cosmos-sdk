@@ -66,7 +66,6 @@ func TestPrepareFlagsForTxCreateValidator(t *testing.T) {
 		defaultMinSelfDelegation,
 	}
 	for _, tt := range tests {
-		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			t.Run(tt.name, func(t *testing.T) { runTest(t, tt, defaultParams) })
 		})
@@ -80,7 +79,6 @@ func TestPrepareFlagsForTxCreateValidator(t *testing.T) {
 	viper.Set(FlagCommissionMaxChangeRate, params.commissionMaxChangeRate)
 	viper.Set(FlagMinSelfDelegation, params.minSelfDelegation)
 	for _, tt := range tests {
-		tt := tt
 		t.Run(tt.name, func(t *testing.T) { runTest(t, tt, params) })
 	}
 }

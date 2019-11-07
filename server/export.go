@@ -92,5 +92,8 @@ func ExportCmd(ctx *Context, cdc *codec.Codec, appExporter AppExporter) *cobra.C
 }
 
 func isEmptyState(db dbm.DB) bool {
-	return db.Stats()["leveldb.sstables"] == ""
+	if db.Stats()["leveldb.sstables"] != "" {
+		return false
+	}
+	return true
 }

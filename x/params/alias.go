@@ -25,7 +25,6 @@ const (
 
 var (
 	// functions aliases
-	NewParamSetPair            = subspace.NewParamSetPair
 	NewSubspace                = subspace.NewSubspace
 	NewKeyTable                = subspace.NewKeyTable
 	DefaultTestComponents      = subspace.DefaultTestComponents

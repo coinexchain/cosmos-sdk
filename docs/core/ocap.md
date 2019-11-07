@@ -1,7 +1,3 @@
----
-order: false
----
-
 # Object-Capability Model
 
 ## Intro

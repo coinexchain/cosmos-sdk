@@ -1,4 +1,4 @@
-package keeper_test
+package keeper
 
 import (
 	"testing"
@@ -12,27 +12,29 @@ import (
 func TestSupply(t *testing.T) {
 	initialPower := int64(100)
 	initTokens := sdk.TokensFromConsensusPower(initialPower)
+	nAccs := int64(4)
 
-	app, ctx := createTestApp(false)
-	totalSupply := sdk.NewCoins(sdk.NewCoin(sdk.DefaultBondDenom, initTokens))
-	app.SupplyKeeper.SetSupply(ctx, types.NewSupply(totalSupply))
+	ctx, _, keeper := createTestInput(t, false, initialPower, nAccs)
 
-	total := app.SupplyKeeper.GetSupply(ctx).GetTotal()
+	total := keeper.GetSupply(ctx).GetTotal()
+	expectedTotal := sdk.NewCoins(sdk.NewCoin(sdk.DefaultBondDenom, initTokens.MulRaw(nAccs)))
 
-	require.Equal(t, totalSupply, total)
+	require.Equal(t, expectedTotal, total)
 }
 
 func TestValidatePermissions(t *testing.T) {
-	app, _ := createTestApp(false)
+	nAccs := int64(0)
+	initialPower := int64(100)
+	_, _, keeper := createTestInput(t, false, initialPower, nAccs)
 
-	err := app.SupplyKeeper.ValidatePermissions(multiPermAcc)
+	err := keeper.ValidatePermissions(multiPermAcc)
 	require.NoError(t, err)
 
-	err = app.SupplyKeeper.ValidatePermissions(randomPermAcc)
+	err = keeper.ValidatePermissions(randomPermAcc)
 	require.NoError(t, err)
 
 	// unregistered permissions
 	otherAcc := types.NewEmptyModuleAccount("other", "other")
-	err = app.SupplyKeeper.ValidatePermissions(otherAcc)
+	err = keeper.ValidatePermissions(otherAcc)
 	require.Error(t, err)
 }

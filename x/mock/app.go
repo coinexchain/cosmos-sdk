@@ -18,7 +18,6 @@ import (
 	"github.com/cosmos/cosmos-sdk/codec"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/cosmos/cosmos-sdk/x/auth"
-	authexported "github.com/cosmos/cosmos-sdk/x/auth/exported"
 	"github.com/cosmos/cosmos-sdk/x/params"
 )
 
@@ -39,7 +38,7 @@ type App struct {
 	AccountKeeper auth.AccountKeeper
 	ParamsKeeper  params.Keeper
 
-	GenesisAccounts  []authexported.Account
+	GenesisAccounts  []auth.Account
 	TotalCoinsSupply sdk.Coins
 }
 
@@ -73,7 +72,7 @@ func NewApp() *App {
 		auth.ProtoBaseAccount,
 	)
 
-	supplyKeeper := NewDummySupplyKeeper(app.AccountKeeper)
+	supplyKeeper := auth.NewDummySupplyKeeper(app.AccountKeeper)
 
 	// Initialize the app. The chainers and blockers can be overwritten before
 	// calling complete setup.
@@ -110,6 +109,7 @@ func (app *App) CompleteSetup(newKeys ...sdk.StoreKey) error {
 }
 
 // InitChainer performs custom logic for initialization.
+// nolint: errcheck
 func (app *App) InitChainer(ctx sdk.Context, _ abci.RequestInitChain) abci.ResponseInitChain {
 
 	// Load the genesis accounts
@@ -167,7 +167,7 @@ func (b AddrKeysSlice) Swap(i, j int) {
 
 // CreateGenAccounts generates genesis accounts loaded with coins, and returns
 // their addresses, pubkeys, and privkeys.
-func CreateGenAccounts(numAccs int, genCoins sdk.Coins) (genAccs []authexported.Account,
+func CreateGenAccounts(numAccs int, genCoins sdk.Coins) (genAccs []auth.Account,
 	addrs []sdk.AccAddress, pubKeys []crypto.PubKey, privKeys []crypto.PrivKey) {
 
 	addrKeysSlice := AddrKeysSlice{}
@@ -196,7 +196,7 @@ func CreateGenAccounts(numAccs int, genCoins sdk.Coins) (genAccs []authexported.
 }
 
 // SetGenesis sets the mock app genesis accounts.
-func SetGenesis(app *App, accs []authexported.Account) {
+func SetGenesis(app *App, accs []auth.Account) {
 	// Pass the accounts in via the application (lazy) instead of through
 	// RequestInitChain.
 	app.GenesisAccounts = accs
@@ -281,8 +281,9 @@ func GeneratePrivKeyAddressPairsFromRand(rand *rand.Rand, n int) (keys []crypto.
 
 // RandomSetGenesis set genesis accounts with random coin values using the
 // provided addresses and coin denominations.
+// nolint: errcheck
 func RandomSetGenesis(r *rand.Rand, app *App, addrs []sdk.AccAddress, denoms []string) {
-	accts := make([]authexported.Account, len(addrs))
+	accts := make([]auth.Account, len(addrs))
 	randCoinIntervals := []BigInterval{
 		{sdk.NewIntWithDecimal(1, 0), sdk.NewIntWithDecimal(1, 1)},
 		{sdk.NewIntWithDecimal(1, 2), sdk.NewIntWithDecimal(1, 3)},
@@ -306,6 +307,25 @@ func RandomSetGenesis(r *rand.Rand, app *App, addrs []sdk.AccAddress, denoms []s
 		accts[i] = &baseAcc
 	}
 	app.GenesisAccounts = accts
+}
+
+// GenSequenceOfTxs generates a set of signed transactions of messages, such
+// that they differ only by having the sequence numbers incremented between
+// every transaction.
+func GenSequenceOfTxs(msgs []sdk.Msg, accnums []uint64, initSeqNums []uint64, numToGenerate int, priv ...crypto.PrivKey) []auth.StdTx {
+	txs := make([]auth.StdTx, numToGenerate)
+	for i := 0; i < numToGenerate; i++ {
+		txs[i] = GenTx(msgs, accnums, initSeqNums, priv...)
+		incrementAllSequenceNumbers(initSeqNums)
+	}
+
+	return txs
+}
+
+func incrementAllSequenceNumbers(initSeqNums []uint64) {
+	for i := 0; i < len(initSeqNums); i++ {
+		initSeqNums[i]++
+	}
 }
 
 func createCodec() *codec.Codec {

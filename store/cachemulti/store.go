@@ -1,7 +1,6 @@
 package cachemulti
 
 import (
-	"fmt"
 	"io"
 
 	dbm "github.com/tendermint/tm-db"
@@ -29,12 +28,10 @@ type Store struct {
 
 var _ types.CacheMultiStore = Store{}
 
-// NewFromKVStore creates a new Store object from a mapping of store keys to
-// CacheWrapper objects and a KVStore as the database. Each CacheWrapper store
-// is cache-wrapped.
 func NewFromKVStore(
-	store types.KVStore, stores map[types.StoreKey]types.CacheWrapper,
-	keys map[string]types.StoreKey, traceWriter io.Writer, traceContext types.TraceContext,
+	store types.KVStore,
+	stores map[types.StoreKey]types.CacheWrapper, keys map[string]types.StoreKey,
+	traceWriter io.Writer, traceContext types.TraceContext,
 ) Store {
 	cms := Store{
 		db:           cachekv.NewStore(store),
@@ -55,14 +52,12 @@ func NewFromKVStore(
 	return cms
 }
 
-// NewStore creates a new Store object from a mapping of store keys to
-// CacheWrapper objects. Each CacheWrapper store is cache-wrapped.
 func NewStore(
-	db dbm.DB, stores map[types.StoreKey]types.CacheWrapper, keys map[string]types.StoreKey,
+	db dbm.DB,
+	stores map[types.StoreKey]types.CacheWrapper, keys map[string]types.StoreKey,
 	traceWriter io.Writer, traceContext types.TraceContext,
 ) Store {
-
-	return NewFromKVStore(dbadapter.Store{DB: db}, stores, keys, traceWriter, traceContext)
+	return NewFromKVStore(dbadapter.Store{db}, stores, keys, traceWriter, traceContext)
 }
 
 func newCacheMultiStoreFromCMS(cms Store) Store {
@@ -70,7 +65,6 @@ func newCacheMultiStoreFromCMS(cms Store) Store {
 	for k, v := range cms.stores {
 		stores[k] = v
 	}
-
 	return NewFromKVStore(cms.db, stores, nil, cms.traceWriter, cms.traceContext)
 }
 
@@ -146,9 +140,5 @@ func (cms Store) GetStore(key types.StoreKey) types.Store {
 
 // GetKVStore returns an underlying KVStore by key.
 func (cms Store) GetKVStore(key types.StoreKey) types.KVStore {
-	store := cms.stores[key]
-	if key == nil {
-		panic(fmt.Sprintf("kv store with key %v has not been registered in stores", key))
-	}
-	return store.(types.KVStore)
+	return cms.stores[key].(types.KVStore)
 }

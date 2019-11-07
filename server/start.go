@@ -20,15 +20,14 @@ import (
 
 // Tendermint full-node start flags
 const (
-	flagWithTendermint  = "with-tendermint"
-	flagAddress         = "address"
-	flagTraceStore      = "trace-store"
-	flagPruning         = "pruning"
-	flagCPUProfile      = "cpu-profile"
-	FlagMinGasPrices    = "minimum-gas-prices"
-	FlagHaltHeight      = "halt-height"
-	FlagHaltTime        = "halt-time"
-	FlagInterBlockCache = "inter-block-cache"
+	flagWithTendermint = "with-tendermint"
+	flagAddress        = "address"
+	flagTraceStore     = "trace-store"
+	flagPruning        = "pruning"
+	flagCPUProfile     = "cpu-profile"
+	FlagMinGasPrices   = "minimum-gas-prices"
+	FlagHaltHeight     = "halt-height"
+	FlagHaltTime       = "halt-time"
 )
 
 // StartCmd runs the service passed in, either stand-alone or in-process with
@@ -77,9 +76,8 @@ which accepts a path for the resulting pprof file.
 		FlagMinGasPrices, "",
 		"Minimum gas prices to accept for transactions; Any fee in a tx must meet this minimum (e.g. 0.01photino;0.0001stake)",
 	)
-	cmd.Flags().Uint64(FlagHaltHeight, 0, "Block height at which to gracefully halt the chain and shutdown the node")
+	cmd.Flags().Uint64(FlagHaltHeight, 0, "Height at which to gracefully halt the chain and shutdown the node")
 	cmd.Flags().Uint64(FlagHaltTime, 0, "Minimum block time (in Unix seconds) at which to gracefully halt the chain and shutdown the node")
-	cmd.Flags().Bool(FlagInterBlockCache, true, "Enable inter-block caching")
 	cmd.Flags().String(flagCPUProfile, "", "Enable CPU profiling and write to the provided file")
 
 	// add support for all Tendermint-specific command line options

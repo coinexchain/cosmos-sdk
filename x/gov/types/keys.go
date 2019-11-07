@@ -52,21 +52,11 @@ var (
 
 var lenTime = len(sdk.FormatTimeBytes(time.Now()))
 
-// GetProposalIDBytes returns the byte representation of the proposalID
-func GetProposalIDBytes(proposalID uint64) (proposalIDBz []byte) {
-	proposalIDBz = make([]byte, 8)
-	binary.BigEndian.PutUint64(proposalIDBz, proposalID)
-	return
-}
-
-// GetProposalIDFromBytes returns proposalID in uint64 format from a byte array
-func GetProposalIDFromBytes(bz []byte) (proposalID uint64) {
-	return binary.BigEndian.Uint64(bz)
-}
-
 // ProposalKey gets a specific proposal from the store
 func ProposalKey(proposalID uint64) []byte {
-	return append(ProposalsKeyPrefix, GetProposalIDBytes(proposalID)...)
+	bz := make([]byte, 8)
+	binary.LittleEndian.PutUint64(bz, proposalID)
+	return append(ProposalsKeyPrefix, bz...)
 }
 
 // ActiveProposalByTimeKey gets the active proposal queue key by endTime
@@ -76,7 +66,10 @@ func ActiveProposalByTimeKey(endTime time.Time) []byte {
 
 // ActiveProposalQueueKey returns the key for a proposalID in the activeProposalQueue
 func ActiveProposalQueueKey(proposalID uint64, endTime time.Time) []byte {
-	return append(ActiveProposalByTimeKey(endTime), GetProposalIDBytes(proposalID)...)
+	bz := make([]byte, 8)
+	binary.LittleEndian.PutUint64(bz, proposalID)
+
+	return append(ActiveProposalByTimeKey(endTime), bz...)
 }
 
 // InactiveProposalByTimeKey gets the inactive proposal queue key by endTime
@@ -86,12 +79,17 @@ func InactiveProposalByTimeKey(endTime time.Time) []byte {
 
 // InactiveProposalQueueKey returns the key for a proposalID in the inactiveProposalQueue
 func InactiveProposalQueueKey(proposalID uint64, endTime time.Time) []byte {
-	return append(InactiveProposalByTimeKey(endTime), GetProposalIDBytes(proposalID)...)
+	bz := make([]byte, 8)
+	binary.LittleEndian.PutUint64(bz, proposalID)
+
+	return append(InactiveProposalByTimeKey(endTime), bz...)
 }
 
 // DepositsKey gets the first part of the deposits key based on the proposalID
 func DepositsKey(proposalID uint64) []byte {
-	return append(DepositsKeyPrefix, GetProposalIDBytes(proposalID)...)
+	bz := make([]byte, 8)
+	binary.LittleEndian.PutUint64(bz, proposalID)
+	return append(DepositsKeyPrefix, bz...)
 }
 
 // DepositKey key of a specific deposit from the store
@@ -101,7 +99,9 @@ func DepositKey(proposalID uint64, depositorAddr sdk.AccAddress) []byte {
 
 // VotesKey gets the first part of the votes key based on the proposalID
 func VotesKey(proposalID uint64) []byte {
-	return append(VotesKeyPrefix, GetProposalIDBytes(proposalID)...)
+	bz := make([]byte, 8)
+	binary.LittleEndian.PutUint64(bz, proposalID)
+	return append(VotesKeyPrefix, bz...)
 }
 
 // VoteKey key of a specific vote from the store
@@ -117,7 +117,7 @@ func SplitProposalKey(key []byte) (proposalID uint64) {
 		panic(fmt.Sprintf("unexpected key length (%d ≠ 8)", len(key[1:])))
 	}
 
-	return GetProposalIDFromBytes(key[1:])
+	return binary.LittleEndian.Uint64(key[1:])
 }
 
 // SplitActiveProposalQueueKey split the active proposal key and returns the proposal id and endTime
@@ -151,8 +151,7 @@ func splitKeyWithTime(key []byte) (proposalID uint64, endTime time.Time) {
 	if err != nil {
 		panic(err)
 	}
-
-	proposalID = GetProposalIDFromBytes(key[1+lenTime:])
+	proposalID = binary.LittleEndian.Uint64(key[1+lenTime:])
 	return
 }
 
@@ -161,7 +160,7 @@ func splitKeyWithAddress(key []byte) (proposalID uint64, addr sdk.AccAddress) {
 		panic(fmt.Sprintf("unexpected key length (%d ≠ %d)", len(key), 8+sdk.AddrLen))
 	}
 
-	proposalID = GetProposalIDFromBytes(key[1:9])
+	proposalID = binary.LittleEndian.Uint64(key[1:9])
 	addr = sdk.AccAddress(key[9:])
 	return
 }

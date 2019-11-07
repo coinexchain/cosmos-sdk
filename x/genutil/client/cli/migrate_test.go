@@ -17,7 +17,7 @@ import (
 	"github.com/cosmos/cosmos-sdk/tests"
 )
 
-func setupCmd(genesisTime string, chainID string) *cobra.Command {
+func setupCmd(genesisTime string, chainId string) *cobra.Command {
 	c := &cobra.Command{
 		Use:  "c",
 		Args: cobra.ArbitraryArgs,
@@ -25,15 +25,9 @@ func setupCmd(genesisTime string, chainID string) *cobra.Command {
 	}
 
 	c.Flags().String(flagGenesisTime, genesisTime, "")
-	c.Flags().String(flagChainID, chainID, "")
+	c.Flags().String(flagChainId, chainId, "")
 
 	return c
-}
-
-func TestGetMigrationCallback(t *testing.T) {
-	for _, version := range GetMigrationVersions() {
-		require.NotNil(t, GetMigrationCallback(version))
-	}
 }
 
 func TestMigrateGenesis(t *testing.T) {

@@ -22,7 +22,7 @@ func SetGenTxsInAppGenesisState(cdc *codec.Codec, appGenesisState map[string]jso
 
 	genesisState := GetGenesisStateFromAppState(cdc, appGenesisState)
 	// convert all the GenTxs to JSON
-	genTxsBz := make([]json.RawMessage, 0, len(genTxs))
+	var genTxsBz []json.RawMessage
 	for _, genTx := range genTxs {
 		txBz, err := cdc.MarshalJSON(genTx)
 		if err != nil {
@@ -39,7 +39,7 @@ func SetGenTxsInAppGenesisState(cdc *codec.Codec, appGenesisState map[string]jso
 // coins in the genesis accounts
 func ValidateAccountInGenesis(appGenesisState map[string]json.RawMessage,
 	genAccIterator types.GenesisAccountsIterator,
-	key sdk.Address, coins sdk.Coins, cdc *codec.Codec) error {
+	key sdk.AccAddress, coins sdk.Coins, cdc *codec.Codec) error {
 
 	accountIsInGenesis := false
 

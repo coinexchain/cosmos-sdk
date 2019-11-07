@@ -56,7 +56,7 @@ func validate(denom string, amount Int) error {
 		return err
 	}
 
-	if amount.IsNegative() {
+	if amount.LT(ZeroInt()) {
 		return fmt.Errorf("negative coin amount: %v", amount)
 	}
 
@@ -124,7 +124,7 @@ func (coin Coin) Sub(coinB Coin) Coin {
 
 	res := Coin{coin.Denom, coin.Amount.Sub(coinB.Amount)}
 	if res.IsNegative() {
-		panic("negative coin amount")
+		panic("negative count amount")
 	}
 
 	return res
@@ -495,12 +495,12 @@ func (coins Coins) AmountOf(denom string) Int {
 	default:
 		midIdx := len(coins) / 2 // 2:1, 3:1, 4:2
 		coin := coins[midIdx]
-		switch {
-		case denom < coin.Denom:
+
+		if denom < coin.Denom {
 			return coins[:midIdx].AmountOf(denom)
-		case denom == coin.Denom:
+		} else if denom == coin.Denom {
 			return coin.Amount
-		default:
+		} else {
 			return coins[midIdx+1:].AmountOf(denom)
 		}
 	}

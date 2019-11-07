@@ -6,7 +6,6 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 	cfg "github.com/tendermint/tendermint/config"
@@ -88,7 +87,7 @@ func InitCmd(ctx *server.Context, cdc *codec.Codec, mbm module.BasicManager,
 			}
 			appState, err := codec.MarshalJSONIndent(cdc, mbm.DefaultGenesis())
 			if err != nil {
-				return errors.Wrap(err, "Failed to marshall default genesis state")
+				return err
 			}
 
 			genDoc := &types.GenesisDoc{}
@@ -99,7 +98,7 @@ func InitCmd(ctx *server.Context, cdc *codec.Codec, mbm module.BasicManager,
 			} else {
 				genDoc, err = types.GenesisDocFromFile(genFile)
 				if err != nil {
-					return errors.Wrap(err, "Failed to read genesis doc from file")
+					return err
 				}
 			}
 
@@ -107,7 +106,7 @@ func InitCmd(ctx *server.Context, cdc *codec.Codec, mbm module.BasicManager,
 			genDoc.Validators = nil
 			genDoc.AppState = appState
 			if err = genutil.ExportGenesisFile(genDoc, genFile); err != nil {
-				return errors.Wrap(err, "Failed to export gensis file")
+				return err
 			}
 
 			toPrint := newPrintInfo(config.Moniker, chainID, nodeID, "", appState)

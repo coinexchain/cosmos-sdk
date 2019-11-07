@@ -1,95 +1,78 @@
-const glob = require("glob");
-const markdownIt = require("markdown-it");
-const meta = require("markdown-it-meta");
-const fs = require("fs");
-const _ = require("lodash");
-
-const sidebar = (directory, array) => {
-  return array.map(i => {
-    const children = _.sortBy(
-      glob
-        .sync(`./${directory}/${i[1]}/*.md`)
-        .map(path => {
-          const md = new markdownIt();
-          const file = fs.readFileSync(path, "utf8");
-          md.use(meta);
-          md.render(file);
-          const order = md.meta.order;
-          return { path, order };
-        })
-        .filter(f => f.order !== false),
-      ["order", "path"]
-    )
-      .map(f => f.path)
-      .filter(f => !f.match("readme"));
-    return {
-      title: i[0],
-      children
-    };
-  });
-};
-
 module.exports = {
-  title: "Cosmos SDK",
-  base: process.env.VUEPRESS_BASE || "/",
-  locales: {
-    "/": {
-      lang: "en-US"
-    },
-    "/ru/": {
-      lang: "ru"
-    },
+  title: "Cosmos SDK Documentation",
+  description: "Documentation for the Cosmos SDK and Gaia.",
+  ga: "UA-51029217-2",
+  dest: "./dist/docs",
+  base: "/docs/",
+  markdown: {
+    lineNumbers: true
   },
   themeConfig: {
     repo: "cosmos/cosmos-sdk",
-    docsDir: "docs",
     editLinks: true,
+    docsDir: "docs",
     docsBranch: "master",
-    locales: {
-      "/": {
-        label: "English",
-        sidebar: sidebar("", [
-          ["Intro", "intro"],
-          ["Basics", "basics"],
-          ["SDK Core", "core"],
-          ["About Modules", "modules"],
-          ["Using the SDK", "sdk"],
-          ["Interfaces", "interfaces"]
-        ])
+    editLinkText: "Edit this page on Github",
+    lastUpdated: true,
+    algolia: {
+      apiKey: "a6e2f64347bb826b732e118c1366819a",
+      indexName: "cosmos_network",
+      debug: false
+    },
+    nav: [
+      { text: "Back to Cosmos", link: "https://cosmos.network" },
+      { text: "RPC", link: "https://cosmos.network/rpc/" }
+    ],
+    sidebar: [
+      {
+        title: "Overview",
+        collapsable: true,
+        children: [
+          "/intro/",
+          "/intro/why-app-specific",
+          "/intro/sdk-app-architecture",
+          "/intro/sdk-design"
+        ]
       },
-      "/ru/": {
-        label: "Русский",
-        sidebar: sidebar("ru", [
-          ["Введение", "intro"],
-          ["Основы", "basics"],
-          ["SDK Core", "core"],
-          ["Модули", "modules"],
-          ["Используем SDK", "sdk"],
-          ["Интерфейсы", "interfaces"]
-        ])
+      {
+        title: "Tutorial",
+        collapsable: true,
+        children: [
+          "/tutorial/",
+          "/tutorial/app-design",
+          "/tutorial/app-init",
+          "/tutorial/types",
+          "/tutorial/key",
+          "/tutorial/keeper",
+          "/tutorial/msgs-handlers",
+          "/tutorial/set-name",
+          "/tutorial/buy-name",
+          "/tutorial/queriers",
+          "/tutorial/alias",
+          "/tutorial/codec",
+          "/tutorial/cli",
+          "/tutorial/rest",
+          "/tutorial/module",
+          "/tutorial/genesis",
+          "/tutorial/app-complete",
+          "/tutorial/entrypoint",
+          "/tutorial/gomod",
+          "/tutorial/build-run",
+          "/tutorial/run-rest"
+        ]
       },
-      '/kr/': {
-        label: '한국어',
-        sidebar: sidebar('kr', [
-          ['소개', 'intro'],
-          ['기초', 'basics'],
-          ['SDK Core', 'core'],
-          ['모듈들', 'modules'],
-          ['프로그램 사용', 'sdk'],
-          ['인터페이스', 'interfaces'],
-        ]),
-      },
-      '/cn/': {
-        label: '中文',
-        sidebar: sidebar('cn', [
-          ['介绍', 'intro'],
-          ['基本', 'basics'],
-          ['SDK Core', 'core'],
-          ['模块', 'modules'],
-          ['使用该程序', 'sdk'],
-          ['接口', 'interfaces'],
-        ]),
-      },
-    }
+      {
+        title: "Interfaces",
+        collapsable: true,
+        children: [
+          "/interfaces/",
+          "/interfaces/cli",
+          "/interfaces/service-providers",
+          "/interfaces/lite/", // this renders the readme
+          "/interfaces/lite/getting_started",
+          "/interfaces/lite/specification"
+        ]
+      }
+    ]
   }
 };

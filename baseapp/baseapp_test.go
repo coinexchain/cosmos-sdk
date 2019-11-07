@@ -4,9 +4,10 @@ import (
 	"bytes"
 	"encoding/binary"
 	"fmt"
-	"io/ioutil"
 	"os"
 	"testing"
+
+	store "github.com/cosmos/cosmos-sdk/store/types"
 
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -16,10 +17,7 @@ import (
 	dbm "github.com/tendermint/tm-db"
 
 	"github.com/cosmos/cosmos-sdk/codec"
-	"github.com/cosmos/cosmos-sdk/store/rootmulti"
-	store "github.com/cosmos/cosmos-sdk/store/types"
 	sdk "github.com/cosmos/cosmos-sdk/types"
-	sdkerrors "github.com/cosmos/cosmos-sdk/types/errors"
 )
 
 var (
@@ -105,13 +103,13 @@ func TestLoadVersion(t *testing.T) {
 	header := abci.Header{Height: 1}
 	app.BeginBlock(abci.RequestBeginBlock{Header: header})
 	res := app.Commit()
-	commitID1 := sdk.CommitID{Version: 1, Hash: res.Data}
+	commitID1 := sdk.CommitID{1, res.Data}
 
 	// execute a block, collect commit ID
 	header = abci.Header{Height: 2}
 	app.BeginBlock(abci.RequestBeginBlock{Header: header})
 	res = app.Commit()
-	commitID2 := sdk.CommitID{Version: 2, Hash: res.Data}
+	commitID2 := sdk.CommitID{2, res.Data}
 
 	// reload with LoadLatestVersion
 	app = NewBaseApp(name, logger, db, nil, pruningOpt)
@@ -130,144 +128,6 @@ func TestLoadVersion(t *testing.T) {
 	app.BeginBlock(abci.RequestBeginBlock{Header: header})
 	app.Commit()
 	testLoadVersionHelper(t, app, int64(2), commitID2)
-}
-
-func useDefaultLoader(app *BaseApp) {
-	app.SetStoreLoader(DefaultStoreLoader)
-}
-
-func useUpgradeLoader(upgrades *store.StoreUpgrades) func(*BaseApp) {
-	return func(app *BaseApp) {
-		app.SetStoreLoader(StoreLoaderWithUpgrade(upgrades))
-	}
-}
-
-func useFileUpgradeLoader(upgradeInfoPath string) func(*BaseApp) {
-	return func(app *BaseApp) {
-		app.SetStoreLoader(UpgradeableStoreLoader(upgradeInfoPath))
-	}
-}
-
-func initStore(t *testing.T, db dbm.DB, storeKey string, k, v []byte) {
-	rs := rootmulti.NewStore(db)
-	rs.SetPruning(store.PruneSyncable)
-	key := sdk.NewKVStoreKey(storeKey)
-	rs.MountStoreWithDB(key, store.StoreTypeIAVL, nil)
-	err := rs.LoadLatestVersion()
-	require.Nil(t, err)
-	require.Equal(t, int64(0), rs.LastCommitID().Version)
-
-	// write some data in substore
-	kv, _ := rs.GetStore(key).(store.KVStore)
-	require.NotNil(t, kv)
-	kv.Set(k, v)
-	commitID := rs.Commit()
-	require.Equal(t, int64(1), commitID.Version)
-}
-
-func checkStore(t *testing.T, db dbm.DB, ver int64, storeKey string, k, v []byte) {
-	rs := rootmulti.NewStore(db)
-	rs.SetPruning(store.PruneSyncable)
-	key := sdk.NewKVStoreKey(storeKey)
-	rs.MountStoreWithDB(key, store.StoreTypeIAVL, nil)
-	err := rs.LoadLatestVersion()
-	require.Nil(t, err)
-	require.Equal(t, ver, rs.LastCommitID().Version)
-
-	// query data in substore
-	kv, _ := rs.GetStore(key).(store.KVStore)
-	require.NotNil(t, kv)
-	require.Equal(t, v, kv.Get(k))
-}
-
-// Test that we can make commits and then reload old versions.
-// Test that LoadLatestVersion actually does.
-func TestSetLoader(t *testing.T) {
-	// write a renamer to a file
-	f, err := ioutil.TempFile("", "upgrade-*.json")
-	require.NoError(t, err)
-	data := []byte(`{"renamed":[{"old_key": "bnk", "new_key": "banker"}]}`)
-	_, err = f.Write(data)
-	require.NoError(t, err)
-	configName := f.Name()
-	require.NoError(t, f.Close())
-
-	// make sure it exists before running everything
-	_, err = os.Stat(configName)
-	require.NoError(t, err)
-
-	cases := map[string]struct {
-		setLoader    func(*BaseApp)
-		origStoreKey string
-		loadStoreKey string
-	}{
-		"don't set loader": {
-			origStoreKey: "foo",
-			loadStoreKey: "foo",
-		},
-		"default loader": {
-			setLoader:    useDefaultLoader,
-			origStoreKey: "foo",
-			loadStoreKey: "foo",
-		},
-		"rename with inline opts": {
-			setLoader: useUpgradeLoader(&store.StoreUpgrades{
-				Renamed: []store.StoreRename{{
-					OldKey: "foo",
-					NewKey: "bar",
-				}},
-			}),
-			origStoreKey: "foo",
-			loadStoreKey: "bar",
-		},
-		"file loader with missing file": {
-			setLoader:    useFileUpgradeLoader(configName + "randomchars"),
-			origStoreKey: "bnk",
-			loadStoreKey: "bnk",
-		},
-		"file loader with existing file": {
-			setLoader:    useFileUpgradeLoader(configName),
-			origStoreKey: "bnk",
-			loadStoreKey: "banker",
-		},
-	}
-
-	k := []byte("key")
-	v := []byte("value")
-
-	for name, tc := range cases {
-		tc := tc
-		t.Run(name, func(t *testing.T) {
-			// prepare a db with some data
-			db := dbm.NewMemDB()
-			initStore(t, db, tc.origStoreKey, k, v)
-
-			// load the app with the existing db
-			opts := []func(*BaseApp){SetPruning(store.PruneSyncable)}
-			if tc.setLoader != nil {
-				opts = append(opts, tc.setLoader)
-			}
-			app := NewBaseApp(t.Name(), defaultLogger(), db, nil, opts...)
-			capKey := sdk.NewKVStoreKey(MainStoreKey)
-			app.MountStores(capKey)
-			app.MountStores(sdk.NewKVStoreKey(tc.loadStoreKey))
-			err := app.LoadLatestVersion(capKey)
-			require.Nil(t, err)
-
-			// "execute" one block
-			app.BeginBlock(abci.RequestBeginBlock{Header: abci.Header{Height: 2}})
-			res := app.Commit()
-			require.NotNil(t, res.Data)
-
-			// check db is properly updated
-			checkStore(t, db, 2, tc.loadStoreKey, k, v)
-			checkStore(t, db, 2, tc.loadStoreKey, []byte("foo"), nil)
-		})
-	}
-
-	// ensure config file was deleted
-	_, err = os.Stat(configName)
-	require.True(t, os.IsNotExist(err))
 }
 
 func TestAppVersionSetterGetter(t *testing.T) {
@@ -309,7 +169,7 @@ func TestLoadVersionInvalid(t *testing.T) {
 	header := abci.Header{Height: 1}
 	app.BeginBlock(abci.RequestBeginBlock{Header: header})
 	res := app.Commit()
-	commitID1 := sdk.CommitID{Version: 1, Hash: res.Data}
+	commitID1 := sdk.CommitID{1, res.Data}
 
 	// create a new app with the stores mounted under the same cap key
 	app = NewBaseApp(name, logger, db, nil, pruningOpt)
@@ -542,7 +402,7 @@ func (msg msgCounter) ValidateBasic() sdk.Error {
 }
 
 func newTxCounter(txInt int64, msgInts ...int64) *txTest {
-	msgs := make([]sdk.Msg, 0, len(msgInts))
+	var msgs []sdk.Msg
 	for _, msgInt := range msgInts {
 		msgs = append(msgs, msgCounter{msgInt, false})
 	}
@@ -595,24 +455,21 @@ func testTxDecoder(cdc *codec.Codec) sdk.TxDecoder {
 	}
 }
 
-func anteHandlerTxTest(t *testing.T, capKey sdk.StoreKey, storeKey []byte) sdk.AnteHandler {
-	return func(ctx sdk.Context, tx sdk.Tx, simulate bool) (newCtx sdk.Context, err error) {
+func anteHandlerTxTest(t *testing.T, capKey *sdk.KVStoreKey, storeKey []byte) sdk.AnteHandler {
+	return func(ctx sdk.Context, tx sdk.Tx, simulate bool) (newCtx sdk.Context, res sdk.Result, abort bool) {
 		store := ctx.KVStore(capKey)
 		txTest := tx.(txTest)
 
 		if txTest.FailOnAnte {
-			return newCtx, sdkerrors.Wrap(sdkerrors.ErrUnauthorized, "ante handler failure")
+			return newCtx, sdk.ErrInternal("ante handler failure").Result(), true
 		}
 
-		res := incrementingCounter(t, store, storeKey, txTest.Counter)
-		if !res.IsOK() {
-			err = sdkerrors.ABCIError(string(res.Codespace), uint32(res.Code), res.Log)
-		}
+		res = incrementingCounter(t, store, storeKey, txTest.Counter)
 		return
 	}
 }
 
-func handlerMsgCounter(t *testing.T, capKey sdk.StoreKey, deliverKey []byte) sdk.Handler {
+func handlerMsgCounter(t *testing.T, capKey *sdk.KVStoreKey, deliverKey []byte) sdk.Handler {
 	return func(ctx sdk.Context, msg sdk.Msg) sdk.Result {
 		store := ctx.KVStore(capKey)
 		var msgCount int64
@@ -629,6 +486,10 @@ func handlerMsgCounter(t *testing.T, capKey sdk.StoreKey, deliverKey []byte) sdk
 
 		return incrementingCounter(t, store, deliverKey, msgCount)
 	}
+}
+
+func i2b(i int64) []byte {
+	return []byte{byte(i)}
 }
 
 func getIntFromStore(store sdk.KVStore, key []byte) int64 {
@@ -840,7 +701,7 @@ func TestSimulateTx(t *testing.T) {
 	gasConsumed := uint64(5)
 
 	anteOpt := func(bapp *BaseApp) {
-		bapp.SetAnteHandler(func(ctx sdk.Context, tx sdk.Tx, simulate bool) (newCtx sdk.Context, err error) {
+		bapp.SetAnteHandler(func(ctx sdk.Context, tx sdk.Tx, simulate bool) (newCtx sdk.Context, res sdk.Result, abort bool) {
 			newCtx = ctx.WithGasMeter(sdk.NewGasMeter(gasConsumed))
 			return
 		})
@@ -901,7 +762,7 @@ func TestSimulateTx(t *testing.T) {
 
 func TestRunInvalidTransaction(t *testing.T) {
 	anteOpt := func(bapp *BaseApp) {
-		bapp.SetAnteHandler(func(ctx sdk.Context, tx sdk.Tx, simulate bool) (newCtx sdk.Context, err error) {
+		bapp.SetAnteHandler(func(ctx sdk.Context, tx sdk.Tx, simulate bool) (newCtx sdk.Context, res sdk.Result, abort bool) {
 			return
 		})
 	}
@@ -985,19 +846,17 @@ func TestRunInvalidTransaction(t *testing.T) {
 func TestTxGasLimits(t *testing.T) {
 	gasGranted := uint64(10)
 	anteOpt := func(bapp *BaseApp) {
-		bapp.SetAnteHandler(func(ctx sdk.Context, tx sdk.Tx, simulate bool) (newCtx sdk.Context, err error) {
+		bapp.SetAnteHandler(func(ctx sdk.Context, tx sdk.Tx, simulate bool) (newCtx sdk.Context, res sdk.Result, abort bool) {
 			newCtx = ctx.WithGasMeter(sdk.NewGasMeter(gasGranted))
 
-			// AnteHandlers must have their own defer/recover in order for the BaseApp
-			// to know how much gas was used! This is because the GasMeter is created in
-			// the AnteHandler, but if it panics the context won't be set properly in
-			// runTx's recover call.
 			defer func() {
 				if r := recover(); r != nil {
 					switch rType := r.(type) {
 					case sdk.ErrorOutOfGas:
 						log := fmt.Sprintf("out of gas in location: %v", rType.Descriptor)
-						err = sdkerrors.Wrap(sdkerrors.ErrOutOfGas, log)
+						res = sdk.ErrOutOfGas(log).Result()
+						res.GasWanted = gasGranted
+						res.GasUsed = newCtx.GasMeter().GasConsumed()
 					default:
 						panic(r)
 					}
@@ -1006,7 +865,9 @@ func TestTxGasLimits(t *testing.T) {
 
 			count := tx.(*txTest).Counter
 			newCtx.GasMeter().ConsumeGas(uint64(count), "counter-ante")
-
+			res = sdk.Result{
+				GasWanted: gasGranted,
+			}
 			return
 		})
 
@@ -1070,14 +931,17 @@ func TestTxGasLimits(t *testing.T) {
 func TestMaxBlockGasLimits(t *testing.T) {
 	gasGranted := uint64(10)
 	anteOpt := func(bapp *BaseApp) {
-		bapp.SetAnteHandler(func(ctx sdk.Context, tx sdk.Tx, simulate bool) (newCtx sdk.Context, err error) {
+		bapp.SetAnteHandler(func(ctx sdk.Context, tx sdk.Tx, simulate bool) (newCtx sdk.Context, res sdk.Result, abort bool) {
 			newCtx = ctx.WithGasMeter(sdk.NewGasMeter(gasGranted))
 
 			defer func() {
 				if r := recover(); r != nil {
 					switch rType := r.(type) {
 					case sdk.ErrorOutOfGas:
-						err = sdkerrors.Wrapf(sdkerrors.ErrOutOfGas, "out of gas in location: %v", rType.Descriptor)
+						log := fmt.Sprintf("out of gas in location: %v", rType.Descriptor)
+						res = sdk.ErrOutOfGas(log).Result()
+						res.GasWanted = gasGranted
+						res.GasUsed = newCtx.GasMeter().GasConsumed()
 					default:
 						panic(r)
 					}
@@ -1086,7 +950,9 @@ func TestMaxBlockGasLimits(t *testing.T) {
 
 			count := tx.(*txTest).Counter
 			newCtx.GasMeter().ConsumeGas(uint64(count), "counter-ante")
-
+			res = sdk.Result{
+				GasWanted: gasGranted,
+			}
 			return
 		})
 
@@ -1129,6 +995,7 @@ func TestMaxBlockGasLimits(t *testing.T) {
 	}
 
 	for i, tc := range testCases {
+		fmt.Printf("debug i: %v\n", i)
 		tx := tc.tx
 
 		// reset the block gas
@@ -1234,7 +1101,7 @@ func TestBaseAppAnteHandler(t *testing.T) {
 func TestGasConsumptionBadTx(t *testing.T) {
 	gasWanted := uint64(5)
 	anteOpt := func(bapp *BaseApp) {
-		bapp.SetAnteHandler(func(ctx sdk.Context, tx sdk.Tx, simulate bool) (newCtx sdk.Context, err error) {
+		bapp.SetAnteHandler(func(ctx sdk.Context, tx sdk.Tx, simulate bool) (newCtx sdk.Context, res sdk.Result, abort bool) {
 			newCtx = ctx.WithGasMeter(sdk.NewGasMeter(gasWanted))
 
 			defer func() {
@@ -1242,7 +1109,9 @@ func TestGasConsumptionBadTx(t *testing.T) {
 					switch rType := r.(type) {
 					case sdk.ErrorOutOfGas:
 						log := fmt.Sprintf("out of gas in location: %v", rType.Descriptor)
-						err = sdkerrors.Wrap(sdkerrors.ErrOutOfGas, log)
+						res = sdk.ErrOutOfGas(log).Result()
+						res.GasWanted = gasWanted
+						res.GasUsed = newCtx.GasMeter().GasConsumed()
 					default:
 						panic(r)
 					}
@@ -1252,9 +1121,12 @@ func TestGasConsumptionBadTx(t *testing.T) {
 			txTest := tx.(txTest)
 			newCtx.GasMeter().ConsumeGas(uint64(txTest.Counter), "counter-ante")
 			if txTest.FailOnAnte {
-				return newCtx, sdkerrors.Wrap(sdkerrors.ErrUnauthorized, "ante handler failure")
+				return newCtx, sdk.ErrInternal("ante handler failure").Result(), true
 			}
 
+			res = sdk.Result{
+				GasWanted: gasWanted,
+			}
 			return
 		})
 	}
@@ -1305,7 +1177,7 @@ func TestGasConsumptionBadTx(t *testing.T) {
 func TestQuery(t *testing.T) {
 	key, value := []byte("hello"), []byte("goodbye")
 	anteOpt := func(bapp *BaseApp) {
-		bapp.SetAnteHandler(func(ctx sdk.Context, tx sdk.Tx, simulate bool) (newCtx sdk.Context, err error) {
+		bapp.SetAnteHandler(func(ctx sdk.Context, tx sdk.Tx, simulate bool) (newCtx sdk.Context, res sdk.Result, abort bool) {
 			store := ctx.KVStore(capKey1)
 			store.Set(key, value)
 			return

@@ -37,7 +37,7 @@ $ <appcli> tx broadcast ./mytxn.json
 			}
 
 			res, err := cliCtx.BroadcastTx(txBytes)
-			cliCtx.PrintOutput(res)
+			cliCtx.PrintOutput(res) // nolint:errcheck
 
 			return err
 		},

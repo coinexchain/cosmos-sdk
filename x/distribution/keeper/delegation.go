@@ -36,7 +36,7 @@ func (k Keeper) calculateDelegationRewardsBetween(ctx sdk.Context, val exported.
 	}
 
 	// sanity check
-	if stake.IsNegative() {
+	if stake.LT(sdk.ZeroDec()) {
 		panic("stake should not be negative")
 	}
 

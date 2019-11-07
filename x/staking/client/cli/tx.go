@@ -89,13 +89,12 @@ func GetCmdEditValidator(cdc *codec.Codec) *cobra.Command {
 			cliCtx := context.NewCLIContext().WithCodec(cdc)
 
 			valAddr := cliCtx.GetFromAddress()
-			description := types.NewDescription(
-				viper.GetString(FlagMoniker),
-				viper.GetString(FlagIdentity),
-				viper.GetString(FlagWebsite),
-				viper.GetString(FlagSecurityContact),
-				viper.GetString(FlagDetails),
-			)
+			description := types.Description{
+				Moniker:  viper.GetString(FlagMoniker),
+				Identity: viper.GetString(FlagIdentity),
+				Website:  viper.GetString(FlagWebsite),
+				Details:  viper.GetString(FlagDetails),
+			}
 
 			var newRate *sdk.Dec
 
@@ -129,7 +128,6 @@ func GetCmdEditValidator(cdc *codec.Codec) *cobra.Command {
 
 	cmd.Flags().AddFlagSet(fsDescriptionEdit)
 	cmd.Flags().AddFlagSet(fsCommissionUpdate)
-	cmd.Flags().AddFlagSet(FsMinSelfDelegation)
 
 	return cmd
 }
@@ -266,7 +264,6 @@ func CreateValidatorMsgHelpers(ipDefault string) (fs *flag.FlagSet, nodeIDFlag, 
 	fsCreateValidator.String(FlagIP, ipDefault, "The node's public IP")
 	fsCreateValidator.String(FlagNodeID, "", "The node's NodeID")
 	fsCreateValidator.String(FlagWebsite, "", "The validator's (optional) website")
-	fsCreateValidator.String(FlagSecurityContact, "", "The validator's (optional) security contact email")
 	fsCreateValidator.String(FlagDetails, "", "The validator's (optional) details")
 	fsCreateValidator.String(FlagIdentity, "", "The (optional) identity signature (ex. UPort or Keybase)")
 	fsCreateValidator.AddFlagSet(FsCommissionCreate)
@@ -299,7 +296,6 @@ func PrepareFlagsForTxCreateValidator(
 	}
 
 	website := viper.GetString(FlagWebsite)
-	securityContact := viper.GetString(FlagSecurityContact)
 	details := viper.GetString(FlagDetails)
 	identity := viper.GetString(FlagIdentity)
 
@@ -310,7 +306,6 @@ func PrepareFlagsForTxCreateValidator(
 	viper.Set(FlagPubKey, sdk.MustBech32ifyConsPub(valPubKey))
 	viper.Set(FlagMoniker, config.Moniker)
 	viper.Set(FlagWebsite, website)
-	viper.Set(FlagSecurityContact, securityContact)
 	viper.Set(FlagDetails, details)
 	viper.Set(FlagIdentity, identity)
 
@@ -354,7 +349,6 @@ func BuildCreateValidatorMsg(cliCtx context.CLIContext, txBldr auth.TxBuilder) (
 		viper.GetString(FlagMoniker),
 		viper.GetString(FlagIdentity),
 		viper.GetString(FlagWebsite),
-		viper.GetString(FlagSecurityContact),
 		viper.GetString(FlagDetails),
 	)
 

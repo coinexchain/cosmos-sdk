@@ -8,7 +8,6 @@ import (
 
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/cosmos/cosmos-sdk/x/auth"
-	authexported "github.com/cosmos/cosmos-sdk/x/auth/exported"
 	"github.com/cosmos/cosmos-sdk/x/bank"
 	"github.com/cosmos/cosmos-sdk/x/mock"
 	"github.com/cosmos/cosmos-sdk/x/staking/types"
@@ -24,6 +23,7 @@ func getMockApp(t *testing.T) (*mock.App, Keeper) {
 	supply.RegisterCodec(mApp.Cdc)
 
 	keyStaking := sdk.NewKVStoreKey(StoreKey)
+	tkeyStaking := sdk.NewTransientStoreKey(TStoreKey)
 	keySupply := sdk.NewKVStoreKey(supply.StoreKey)
 
 	feeCollector := supply.NewEmptyModuleAccount(auth.FeeCollectorName)
@@ -31,25 +31,25 @@ func getMockApp(t *testing.T) (*mock.App, Keeper) {
 	bondPool := supply.NewEmptyModuleAccount(types.BondedPoolName, supply.Burner, supply.Staking)
 
 	blacklistedAddrs := make(map[string]bool)
-	blacklistedAddrs[feeCollector.GetAddress().String()] = true
-	blacklistedAddrs[notBondedPool.GetAddress().String()] = true
-	blacklistedAddrs[bondPool.GetAddress().String()] = true
+	blacklistedAddrs[feeCollector.String()] = true
+	blacklistedAddrs[notBondedPool.String()] = true
+	blacklistedAddrs[bondPool.String()] = true
 
 	bankKeeper := bank.NewBaseKeeper(mApp.AccountKeeper, mApp.ParamsKeeper.Subspace(bank.DefaultParamspace), bank.DefaultCodespace, blacklistedAddrs)
 	maccPerms := map[string][]string{
 		auth.FeeCollectorName:   nil,
-		types.NotBondedPoolName: {supply.Burner, supply.Staking},
-		types.BondedPoolName:    {supply.Burner, supply.Staking},
+		types.NotBondedPoolName: []string{supply.Burner, supply.Staking},
+		types.BondedPoolName:    []string{supply.Burner, supply.Staking},
 	}
 	supplyKeeper := supply.NewKeeper(mApp.Cdc, keySupply, mApp.AccountKeeper, bankKeeper, maccPerms)
-	keeper := NewKeeper(mApp.Cdc, keyStaking, supplyKeeper, mApp.ParamsKeeper.Subspace(DefaultParamspace), DefaultCodespace)
+	keeper := NewKeeper(mApp.Cdc, keyStaking, tkeyStaking, supplyKeeper, mApp.ParamsKeeper.Subspace(DefaultParamspace), DefaultCodespace)
 
 	mApp.Router().AddRoute(RouterKey, NewHandler(keeper))
 	mApp.SetEndBlocker(getEndBlocker(keeper))
 	mApp.SetInitChainer(getInitChainer(mApp, keeper, mApp.AccountKeeper, supplyKeeper,
 		[]supplyexported.ModuleAccountI{feeCollector, notBondedPool, bondPool}))
 
-	require.NoError(t, mApp.CompleteSetup(keyStaking, keySupply))
+	require.NoError(t, mApp.CompleteSetup(keyStaking, tkeyStaking, keySupply))
 	return mApp, keeper
 }
 
@@ -129,14 +129,14 @@ func TestStakingMsgs(t *testing.T) {
 		Address: addr2,
 		Coins:   sdk.Coins{genCoin},
 	}
-	accs := []authexported.Account{acc1, acc2}
+	accs := []auth.Account{acc1, acc2}
 
 	mock.SetGenesis(mApp, accs)
 	mock.CheckBalance(t, mApp, addr1, sdk.Coins{genCoin})
 	mock.CheckBalance(t, mApp, addr2, sdk.Coins{genCoin})
 
 	// create validator
-	description := NewDescription("foo_moniker", "", "", "", "")
+	description := NewDescription("foo_moniker", "", "", "")
 	createValidatorMsg := NewMsgCreateValidator(
 		sdk.ValAddress(addr1), priv1.PubKey(), bondCoin, description, commissionRates, sdk.OneInt(),
 	)
@@ -157,7 +157,7 @@ func TestStakingMsgs(t *testing.T) {
 	mApp.BeginBlock(abci.RequestBeginBlock{Header: header})
 
 	// edit the validator
-	description = NewDescription("bar_moniker", "", "", "", "")
+	description = NewDescription("bar_moniker", "", "", "")
 	editValidatorMsg := NewMsgEditValidator(sdk.ValAddress(addr1), description, nil, nil)
 
 	header = abci.Header{Height: mApp.LastBlockHeight() + 1}

@@ -90,14 +90,14 @@ func CanWithdrawInvariant(k Keeper) sdk.Invariant {
 			}
 
 			remaining = k.GetValidatorOutstandingRewards(ctx, val.GetOperator())
-			if len(remaining) > 0 && remaining[0].Amount.IsNegative() {
+			if len(remaining) > 0 && remaining[0].Amount.LT(sdk.ZeroDec()) {
 				return true
 			}
 
 			return false
 		})
 
-		broken := len(remaining) > 0 && remaining[0].Amount.IsNegative()
+		broken := len(remaining) > 0 && remaining[0].Amount.LT(sdk.ZeroDec())
 		return sdk.FormatInvariant(types.ModuleName, "can withdraw",
 			fmt.Sprintf("remaining coins: %v\n", remaining)), broken
 	}

@@ -3,14 +3,14 @@ package keys
 import (
 	cryptoAmino "github.com/tendermint/tendermint/crypto/encoding/amino"
 
-	"github.com/cosmos/cosmos-sdk/codec"
+	amino "github.com/tendermint/go-amino"
 	"github.com/cosmos/cosmos-sdk/crypto/keys/hd"
 )
 
-var cdc *codec.Codec
+var cdc *amino.Codec
 
 func init() {
-	cdc = codec.New()
+	cdc = amino.NewCodec()
 	cryptoAmino.RegisterAmino(cdc)
 	cdc.RegisterInterface((*Info)(nil), nil)
 	cdc.RegisterConcrete(hd.BIP44Params{}, "crypto/keys/hd/BIP44Params", nil)

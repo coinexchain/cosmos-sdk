@@ -46,7 +46,9 @@ If you supply a dash (-) argument in place of an input filename, the command rea
 			txBytesBase64 := base64.StdEncoding.EncodeToString(txBytes)
 
 			response := txEncodeRespStr(txBytesBase64)
-			return cliCtx.PrintOutput(response)
+			cliCtx.PrintOutput(response) // nolint:errcheck
+
+			return nil
 		},
 	}
 

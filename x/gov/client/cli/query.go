@@ -87,29 +87,27 @@ func GetCmdQueryProposals(queryRoute string, cdc *codec.Codec) *cobra.Command {
 		Use:   "proposals",
 		Short: "Query proposals with optional filters",
 		Long: strings.TrimSpace(
-			fmt.Sprintf(`Query for a all paginated proposals that match optional filters:
+			fmt.Sprintf(`Query for a all proposals. You can filter the returns with the following flags.
 
 Example:
 $ %s query gov proposals --depositor cosmos1skjwj5whet0lpe65qaq4rpq03hjxlwd9nf39lk
 $ %s query gov proposals --voter cosmos1skjwj5whet0lpe65qaq4rpq03hjxlwd9nf39lk
 $ %s query gov proposals --status (DepositPeriod|VotingPeriod|Passed|Rejected)
-$ %s query gov proposals --page=2 --limit=100
 `,
-				version.ClientName, version.ClientName, version.ClientName, version.ClientName,
+				version.ClientName, version.ClientName, version.ClientName,
 			),
 		),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			bechDepositorAddr := viper.GetString(flagDepositor)
 			bechVoterAddr := viper.GetString(flagVoter)
 			strProposalStatus := viper.GetString(flagStatus)
-			page := viper.GetInt(flagPage)
-			limit := viper.GetInt(flagNumLimit)
+			numLimit := uint64(viper.GetInt64(flagNumLimit))
 
 			var depositorAddr sdk.AccAddress
 			var voterAddr sdk.AccAddress
 			var proposalStatus types.ProposalStatus
 
-			params := types.NewQueryProposalsParams(page, limit, proposalStatus, voterAddr, depositorAddr)
+			params := types.NewQueryProposalsParams(proposalStatus, numLimit, voterAddr, depositorAddr)
 
 			if len(bechDepositorAddr) != 0 {
 				depositorAddr, err := sdk.AccAddressFromBech32(bechDepositorAddr)
@@ -154,15 +152,14 @@ $ %s query gov proposals --page=2 --limit=100
 			}
 
 			if len(matchingProposals) == 0 {
-				return fmt.Errorf("no matching proposals found")
+				return fmt.Errorf("No matching proposals found")
 			}
 
 			return cliCtx.PrintOutput(matchingProposals) // nolint:errcheck
 		},
 	}
 
-	cmd.Flags().Int(flagPage, 1, "pagination page of proposals to to query for")
-	cmd.Flags().Int(flagNumLimit, 100, "pagination limit of proposals to query for")
+	cmd.Flags().String(flagNumLimit, "", "(optional) limit to latest [number] proposals. Defaults to all proposals")
 	cmd.Flags().String(flagDepositor, "", "(optional) filter by proposals deposited on by depositor")
 	cmd.Flags().String(flagVoter, "", "(optional) filter by proposals voted on by voted")
 	cmd.Flags().String(flagStatus, "", "(optional) filter proposals by proposal status, status: deposit_period/voting_period/passed/rejected")
@@ -325,7 +322,7 @@ $ %s query gov deposit 1 cosmos1skjwj5whet0lpe65qaq4rpq03hjxlwd9nf39lk
 			// check to see if the proposal is in the store
 			_, err = gcutils.QueryProposalByID(proposalID, cliCtx, queryRoute)
 			if err != nil {
-				return fmt.Errorf("failed to fetch proposal-id %d: %s", proposalID, err)
+				return fmt.Errorf("Failed to fetch proposal-id %d: %s", proposalID, err)
 			}
 
 			depositorAddr, err := sdk.AccAddressFromBech32(args[1])
@@ -551,7 +548,7 @@ $ %s query gov param deposit
 				cdc.MustUnmarshalJSON(res, &param)
 				out = param
 			default:
-				return fmt.Errorf("argument must be one of (voting|tallying|deposit), was %s", args[0])
+				return fmt.Errorf("Argument must be one of (voting|tallying|deposit), was %s", args[0])
 			}
 
 			return cliCtx.PrintOutput(out)

@@ -17,6 +17,7 @@ import (
 	"github.com/cosmos/cosmos-sdk/client/context"
 	"github.com/cosmos/cosmos-sdk/client/flags"
 	"github.com/cosmos/cosmos-sdk/codec"
+	keybase "github.com/cosmos/cosmos-sdk/crypto/keys"
 	"github.com/cosmos/cosmos-sdk/server"
 
 	// unnamed import of statik for swagger UI support
@@ -25,8 +26,9 @@ import (
 
 // RestServer represents the Light Client Rest server
 type RestServer struct {
-	Mux    *mux.Router
-	CliCtx context.CLIContext
+	Mux     *mux.Router
+	CliCtx  context.CLIContext
+	KeyBase keybase.Keybase
 
 	log      log.Logger
 	listener net.Listener

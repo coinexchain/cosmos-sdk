@@ -69,7 +69,7 @@ func (c Commission) String() string {
 // parameters. If validation fails, an SDK error is returned.
 func (c CommissionRates) Validate() sdk.Error {
 	switch {
-	case c.MaxRate.IsNegative():
+	case c.MaxRate.LT(sdk.ZeroDec()):
 		// max rate cannot be negative
 		return ErrCommissionNegative(DefaultCodespace)
 
@@ -77,7 +77,7 @@ func (c CommissionRates) Validate() sdk.Error {
 		// max rate cannot be greater than 1
 		return ErrCommissionHuge(DefaultCodespace)
 
-	case c.Rate.IsNegative():
+	case c.Rate.LT(sdk.ZeroDec()):
 		// rate cannot be negative
 		return ErrCommissionNegative(DefaultCodespace)
 
@@ -85,7 +85,7 @@ func (c CommissionRates) Validate() sdk.Error {
 		// rate cannot be greater than the max rate
 		return ErrCommissionGTMaxRate(DefaultCodespace)
 
-	case c.MaxChangeRate.IsNegative():
+	case c.MaxChangeRate.LT(sdk.ZeroDec()):
 		// change rate cannot be negative
 		return ErrCommissionChangeRateNegative(DefaultCodespace)
 
@@ -105,7 +105,7 @@ func (c Commission) ValidateNewRate(newRate sdk.Dec, blockTime time.Time) sdk.Er
 		// new rate cannot be changed more than once within 24 hours
 		return ErrCommissionUpdateTime(DefaultCodespace)
 
-	case newRate.IsNegative():
+	case newRate.LT(sdk.ZeroDec()):
 		// new rate cannot be negative
 		return ErrCommissionNegative(DefaultCodespace)
 

@@ -247,9 +247,9 @@ func PostProcessResponseBare(w http.ResponseWriter, cliCtx context.CLIContext, b
 		err  error
 	)
 
-	switch b := body.(type) {
+	switch body.(type) {
 	case []byte:
-		resp = b
+		resp = body.([]byte)
 
 	default:
 		if cliCtx.Indent {
@@ -279,9 +279,9 @@ func PostProcessResponse(w http.ResponseWriter, cliCtx context.CLIContext, resp 
 		return
 	}
 
-	switch res := resp.(type) {
+	switch resp.(type) {
 	case []byte:
-		result = res
+		result = resp.([]byte)
 
 	default:
 		var err error

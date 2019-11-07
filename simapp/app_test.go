@@ -42,11 +42,6 @@ func TestBlackListedAddrs(t *testing.T) {
 	app := NewSimApp(log.NewTMLogger(log.NewSyncWriter(os.Stdout)), db, nil, true, 0)
 
 	for acc := range maccPerms {
-		require.True(t, app.BankKeeper.BlacklistedAddr(app.SupplyKeeper.GetModuleAddress(acc)))
+		require.True(t, app.bankKeeper.BlacklistedAddr(app.supplyKeeper.GetModuleAddress(acc)))
 	}
-}
-
-func TestGetMaccPerms(t *testing.T) {
-	dup := GetMaccPerms()
-	require.Equal(t, maccPerms, dup, "duplicated module account permissions differed from actual module account permissions")
 }

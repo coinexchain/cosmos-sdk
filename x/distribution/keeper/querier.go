@@ -85,11 +85,7 @@ func queryValidatorOutstandingRewards(ctx sdk.Context, path []string, req abci.R
 	if err != nil {
 		return nil, sdk.ErrUnknownRequest(sdk.AppendMsgToErr("incorrectly formatted request data", err.Error()))
 	}
-	rewards := k.GetValidatorOutstandingRewards(ctx, params.ValidatorAddress)
-	if rewards == nil {
-		rewards = sdk.DecCoins{}
-	}
-	bz, err := codec.MarshalJSONIndent(k.cdc, rewards)
+	bz, err := codec.MarshalJSONIndent(k.cdc, k.GetValidatorOutstandingRewards(ctx, params.ValidatorAddress))
 	if err != nil {
 		return nil, sdk.ErrInternal(sdk.AppendMsgToErr("could not marshal result to JSON", err.Error()))
 	}
@@ -103,9 +99,6 @@ func queryValidatorCommission(ctx sdk.Context, path []string, req abci.RequestQu
 		return nil, sdk.ErrUnknownRequest(sdk.AppendMsgToErr("incorrectly formatted request data", err.Error()))
 	}
 	commission := k.GetValidatorAccumulatedCommission(ctx, params.ValidatorAddress)
-	if commission == nil {
-		commission = sdk.DecCoins{}
-	}
 	bz, err := codec.MarshalJSONIndent(k.cdc, commission)
 	if err != nil {
 		return nil, sdk.ErrInternal(sdk.AppendMsgToErr("could not marshal result to JSON", err.Error()))
@@ -157,9 +150,6 @@ func queryDelegationRewards(ctx sdk.Context, _ []string, req abci.RequestQuery, 
 
 	endingPeriod := k.incrementValidatorPeriod(ctx, val)
 	rewards := k.calculateDelegationRewards(ctx, val, del, endingPeriod)
-	if rewards == nil {
-		rewards = sdk.DecCoins{}
-	}
 
 	bz, err := codec.MarshalJSONIndent(k.cdc, rewards)
 	if err != nil {
@@ -220,7 +210,7 @@ func queryDelegatorValidators(ctx sdk.Context, _ []string, req abci.RequestQuery
 	k.stakingKeeper.IterateDelegations(
 		ctx, params.DelegatorAddress,
 		func(_ int64, del exported.DelegationI) (stop bool) {
-			validators = append(validators, del.GetValidatorAddr())
+			validators = append(validators[:], del.GetValidatorAddr())
 			return false
 		},
 	)
@@ -252,11 +242,7 @@ func queryDelegatorWithdrawAddress(ctx sdk.Context, _ []string, req abci.Request
 }
 
 func queryCommunityPool(ctx sdk.Context, _ []string, req abci.RequestQuery, k Keeper) ([]byte, sdk.Error) {
-	pool := k.GetFeePoolCommunityCoins(ctx)
-	if pool == nil {
-		pool = sdk.DecCoins{}
-	}
-	bz, err := k.cdc.MarshalJSON(pool)
+	bz, err := k.cdc.MarshalJSON(k.GetFeePoolCommunityCoins(ctx))
 	if err != nil {
 		return nil, sdk.ErrInternal(sdk.AppendMsgToErr("could not marshal result to JSON", err.Error()))
 	}

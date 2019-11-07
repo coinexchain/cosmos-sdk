@@ -5,7 +5,6 @@ import (
 
 	dbm "github.com/tendermint/tm-db"
 
-	store "github.com/cosmos/cosmos-sdk/store/types"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 )
 
@@ -19,7 +18,7 @@ func (ms multiStore) CacheMultiStore() sdk.CacheMultiStore {
 	panic("not implemented")
 }
 
-func (ms multiStore) CacheMultiStoreWithVersion(_ int64) (sdk.CacheMultiStore, error) {
+func (kv multiStore) CacheMultiStoreWithVersion(_ int64) (sdk.CacheMultiStore, error) {
 	panic("not implemented")
 }
 
@@ -71,14 +70,6 @@ func (ms multiStore) LoadLatestVersion() error {
 	return nil
 }
 
-func (ms multiStore) LoadLatestVersionAndUpgrade(upgrades *store.StoreUpgrades) error {
-	return nil
-}
-
-func (ms multiStore) LoadVersionAndUpgrade(ver int64, upgrades *store.StoreUpgrades) error {
-	panic("not implemented")
-}
-
 func (ms multiStore) LoadVersion(ver int64) error {
 	panic("not implemented")
 }
@@ -92,10 +83,6 @@ func (ms multiStore) GetStore(key sdk.StoreKey) sdk.Store {
 }
 
 func (ms multiStore) GetStoreType() sdk.StoreType {
-	panic("not implemented")
-}
-
-func (ms multiStore) SetInterBlockCache(_ sdk.MultiStorePersistentCache) {
 	panic("not implemented")
 }
 

@@ -60,7 +60,7 @@ func queryValidators(ctx sdk.Context, req abci.RequestQuery, k Keeper) ([]byte, 
 	filteredVals := make([]types.Validator, 0, len(validators))
 
 	for _, val := range validators {
-		if strings.EqualFold(val.GetStatus().String(), params.Status) {
+		if strings.ToLower(val.GetStatus().String()) == strings.ToLower(params.Status) {
 			filteredVals = append(filteredVals, val)
 		}
 	}
@@ -115,10 +115,6 @@ func queryValidatorDelegations(ctx sdk.Context, req abci.RequestQuery, k Keeper)
 		return nil, sdk.ErrInternal(err.Error())
 	}
 
-	if delegationResps == nil {
-		delegationResps = types.DelegationResponses{}
-	}
-
 	res, err := codec.MarshalJSONIndent(types.ModuleCdc, delegationResps)
 	if err != nil {
 		return nil, sdk.ErrInternal(sdk.AppendMsgToErr("failed to marshal result to JSON", err.Error()))
@@ -136,9 +132,6 @@ func queryValidatorUnbondingDelegations(ctx sdk.Context, req abci.RequestQuery, 
 	}
 
 	unbonds := k.GetUnbondingDelegationsFromValidator(ctx, params.ValidatorAddr)
-	if unbonds == nil {
-		unbonds = types.UnbondingDelegations{}
-	}
 
 	res, err := codec.MarshalJSONIndent(types.ModuleCdc, unbonds)
 	if err != nil {
@@ -162,10 +155,6 @@ func queryDelegatorDelegations(ctx sdk.Context, req abci.RequestQuery, k Keeper)
 		return nil, sdk.ErrInternal(err.Error())
 	}
 
-	if delegationResps == nil {
-		delegationResps = types.DelegationResponses{}
-	}
-
 	res, err := codec.MarshalJSONIndent(types.ModuleCdc, delegationResps)
 	if err != nil {
 		return nil, sdk.ErrInternal(sdk.AppendMsgToErr("failed to marshal result to JSON", err.Error()))
@@ -183,9 +172,6 @@ func queryDelegatorUnbondingDelegations(ctx sdk.Context, req abci.RequestQuery, 
 	}
 
 	unbondingDelegations := k.GetAllUnbondingDelegations(ctx, params.DelegatorAddr)
-	if unbondingDelegations == nil {
-		unbondingDelegations = types.UnbondingDelegations{}
-	}
 
 	res, err := codec.MarshalJSONIndent(types.ModuleCdc, unbondingDelegations)
 	if err != nil {
@@ -206,9 +192,6 @@ func queryDelegatorValidators(ctx sdk.Context, req abci.RequestQuery, k Keeper) 
 	}
 
 	validators := k.GetDelegatorValidators(ctx, params.DelegatorAddr, stakingParams.MaxValidators)
-	if validators == nil {
-		validators = types.Validators{}
-	}
 
 	res, err := codec.MarshalJSONIndent(types.ModuleCdc, validators)
 	if err != nil {
@@ -296,27 +279,22 @@ func queryRedelegations(ctx sdk.Context, req abci.RequestQuery, k Keeper) ([]byt
 
 	var redels []types.Redelegation
 
-	switch {
-	case !params.DelegatorAddr.Empty() && !params.SrcValidatorAddr.Empty() && !params.DstValidatorAddr.Empty():
+	if !params.DelegatorAddr.Empty() && !params.SrcValidatorAddr.Empty() && !params.DstValidatorAddr.Empty() {
 		redel, found := k.GetRedelegation(ctx, params.DelegatorAddr, params.SrcValidatorAddr, params.DstValidatorAddr)
 		if !found {
 			return nil, types.ErrNoRedelegation(types.DefaultCodespace)
 		}
 
 		redels = []types.Redelegation{redel}
-	case params.DelegatorAddr.Empty() && !params.SrcValidatorAddr.Empty() && params.DstValidatorAddr.Empty():
+	} else if params.DelegatorAddr.Empty() && !params.SrcValidatorAddr.Empty() && params.DstValidatorAddr.Empty() {
 		redels = k.GetRedelegationsFromSrcValidator(ctx, params.SrcValidatorAddr)
-	default:
+	} else {
 		redels = k.GetAllRedelegations(ctx, params.DelegatorAddr, params.SrcValidatorAddr, params.DstValidatorAddr)
 	}
 
 	redelResponses, err := redelegationsToRedelegationResponses(ctx, k, redels)
 	if err != nil {
 		return nil, sdk.ErrInternal(err.Error())
-	}
-
-	if redelResponses == nil {
-		redelResponses = types.RedelegationResponses{}
 	}
 
 	res, err := codec.MarshalJSONIndent(types.ModuleCdc, redelResponses)
@@ -372,7 +350,7 @@ func delegationToDelegationResponse(ctx sdk.Context, k Keeper, del types.Delegat
 		del.DelegatorAddress,
 		del.ValidatorAddress,
 		del.Shares,
-		sdk.NewCoin(k.BondDenom(ctx), val.TokensFromShares(del.Shares).TruncateInt()),
+		val.TokensFromShares(del.Shares).TruncateInt(),
 	), nil
 }
 
@@ -380,7 +358,7 @@ func delegationsToDelegationResponses(
 	ctx sdk.Context, k Keeper, delegations types.Delegations,
 ) (types.DelegationResponses, sdk.Error) {
 
-	resp := make(types.DelegationResponses, len(delegations))
+	resp := make(types.DelegationResponses, len(delegations), len(delegations))
 	for i, del := range delegations {
 		delResp, err := delegationToDelegationResponse(ctx, k, del)
 		if err != nil {
@@ -397,14 +375,14 @@ func redelegationsToRedelegationResponses(
 	ctx sdk.Context, k Keeper, redels types.Redelegations,
 ) (types.RedelegationResponses, sdk.Error) {
 
-	resp := make(types.RedelegationResponses, len(redels))
+	resp := make(types.RedelegationResponses, len(redels), len(redels))
 	for i, redel := range redels {
 		val, found := k.GetValidator(ctx, redel.ValidatorDstAddress)
 		if !found {
 			return nil, types.ErrNoValidatorFound(types.DefaultCodespace)
 		}
 
-		entryResponses := make([]types.RedelegationEntryResponse, len(redel.Entries))
+		entryResponses := make([]types.RedelegationEntryResponse, len(redel.Entries), len(redel.Entries))
 		for j, entry := range redel.Entries {
 			entryResponses[j] = types.NewRedelegationEntryResponse(
 				entry.CreationHeight,

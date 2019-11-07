@@ -7,8 +7,7 @@ import (
 	"github.com/tendermint/tendermint/libs/log"
 
 	sdk "github.com/cosmos/cosmos-sdk/types"
-	authexported "github.com/cosmos/cosmos-sdk/x/auth/exported"
-	vestexported "github.com/cosmos/cosmos-sdk/x/auth/vesting/exported"
+	"github.com/cosmos/cosmos-sdk/x/auth/exported"
 	"github.com/cosmos/cosmos-sdk/x/bank/internal/types"
 	"github.com/cosmos/cosmos-sdk/x/params"
 )
@@ -185,7 +184,7 @@ func (keeper BaseSendKeeper) InputOutputCoins(ctx sdk.Context, inputs []types.In
 	}
 
 	for _, in := range inputs {
-		_, err := keeper.SubtractCoins(ctx, in.Address, in.Coins)
+		_, err :=  keeper.SubtractCoins(ctx, in.Address, in.Coins)
 		if err != nil {
 			return err
 		}
@@ -217,6 +216,16 @@ func (keeper BaseSendKeeper) InputOutputCoins(ctx sdk.Context, inputs []types.In
 
 // SendCoins moves coins from one account to another
 func (keeper BaseSendKeeper) SendCoins(ctx sdk.Context, fromAddr sdk.AccAddress, toAddr sdk.AccAddress, amt sdk.Coins) sdk.Error {
+	_, err := keeper.SubtractCoins(ctx, fromAddr, amt)
+	if err != nil {
+		return err
+	}
+
+	_, err = keeper.AddCoins(ctx, toAddr, amt)
+	if err != nil {
+		return err
+	}
+
 	ctx.EventManager().EmitEvents(sdk.Events{
 		sdk.NewEvent(
 			types.EventTypeTransfer,
@@ -228,16 +237,6 @@ func (keeper BaseSendKeeper) SendCoins(ctx sdk.Context, fromAddr sdk.AccAddress,
 			sdk.NewAttribute(types.AttributeKeySender, fromAddr.String()),
 		),
 	})
-
-	_, err := keeper.SubtractCoins(ctx, fromAddr, amt)
-	if err != nil {
-		return err
-	}
-
-	_, err = keeper.AddCoins(ctx, toAddr, amt)
-	if err != nil {
-		return err
-	}
 
 	return nil
 }
@@ -316,6 +315,7 @@ func (keeper BaseSendKeeper) SetCoins(ctx sdk.Context, addr sdk.AccAddress, amt 
 }
 
 // GetSendEnabled returns the current SendEnabled
+// nolint: errcheck
 func (keeper BaseSendKeeper) GetSendEnabled(ctx sdk.Context) bool {
 	var enabled bool
 	keeper.paramSpace.Get(ctx, types.ParamStoreKeySendEnabled, &enabled)
@@ -380,22 +380,24 @@ func (keeper BaseViewKeeper) Codespace() sdk.CodespaceType {
 }
 
 // CONTRACT: assumes that amt is valid.
-func trackDelegation(acc authexported.Account, blockTime time.Time, amt sdk.Coins) error {
-	vacc, ok := acc.(vestexported.VestingAccount)
+func trackDelegation(acc exported.Account, blockTime time.Time, amt sdk.Coins) error {
+	vacc, ok := acc.(exported.VestingAccount)
 	if ok {
 		// TODO: return error on account.TrackDelegation
 		vacc.TrackDelegation(blockTime, amt)
+		return nil
 	}
 
 	return acc.SetCoins(acc.GetCoins().Sub(amt))
 }
 
 // CONTRACT: assumes that amt is valid.
-func trackUndelegation(acc authexported.Account, amt sdk.Coins) error {
-	vacc, ok := acc.(vestexported.VestingAccount)
+func trackUndelegation(acc exported.Account, amt sdk.Coins) error {
+	vacc, ok := acc.(exported.VestingAccount)
 	if ok {
 		// TODO: return error on account.TrackUndelegation
 		vacc.TrackUndelegation(amt)
+		return nil
 	}
 
 	return acc.SetCoins(acc.GetCoins().Add(amt))

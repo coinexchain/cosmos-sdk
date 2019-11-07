@@ -27,8 +27,8 @@ func Test_writeReadLedgerInfo(t *testing.T) {
 		types.MustBech32ifyAccPub(lInfo.GetPubKey()))
 
 	// Serialize and restore
-	serialized := marshalInfo(lInfo)
-	restoredInfo, err := unmarshalInfo(serialized)
+	serialized := writeInfo(lInfo)
+	restoredInfo, err := readInfo(serialized)
 	assert.NoError(t, err)
 	assert.NotNil(t, restoredInfo)
 

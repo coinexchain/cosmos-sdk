@@ -3,7 +3,6 @@ Package module contains application module patterns and associated "manager" fun
 The module pattern has been broken down by:
  - independent module functionality (AppModuleBasic)
  - inter-dependent module genesis functionality (AppModuleGenesis)
- - inter-dependent module simulation functionality (AppModuleSimulation)
  - inter-dependent module full functionality (AppModule)
 
 inter-dependent module functionality is module functionality which somehow
@@ -42,7 +41,6 @@ import (
 )
 
 //__________________________________________________________________________________________
-
 // AppModuleBasic is the standard form for basic non-dependant elements of an application module.
 type AppModuleBasic interface {
 	Name() string
@@ -58,10 +56,9 @@ type AppModuleBasic interface {
 	GetQueryCmd(*codec.Codec) *cobra.Command
 }
 
-// BasicManager is a collection of AppModuleBasic
+// collections of AppModuleBasic
 type BasicManager map[string]AppModuleBasic
 
-// NewBasicManager creates a new BasicManager object
 func NewBasicManager(modules ...AppModuleBasic) BasicManager {
 	moduleMap := make(map[string]AppModuleBasic)
 	for _, module := range modules {
@@ -70,14 +67,14 @@ func NewBasicManager(modules ...AppModuleBasic) BasicManager {
 	return moduleMap
 }
 
-// RegisterCodec registers all module codecs
+// RegisterCodecs registers all module codecs
 func (bm BasicManager) RegisterCodec(cdc *codec.Codec) {
 	for _, b := range bm {
 		b.RegisterCodec(cdc)
 	}
 }
 
-// DefaultGenesis provides default genesis information for all modules
+// Provided default genesis information for all modules
 func (bm BasicManager) DefaultGenesis() map[string]json.RawMessage {
 	genesis := make(map[string]json.RawMessage)
 	for _, b := range bm {
@@ -86,7 +83,7 @@ func (bm BasicManager) DefaultGenesis() map[string]json.RawMessage {
 	return genesis
 }
 
-// ValidateGenesis performs genesis state validation for all modules
+// Provided default genesis information for all modules
 func (bm BasicManager) ValidateGenesis(genesis map[string]json.RawMessage) error {
 	for _, b := range bm {
 		if err := b.ValidateGenesis(genesis[b.Name()]); err != nil {
@@ -96,14 +93,14 @@ func (bm BasicManager) ValidateGenesis(genesis map[string]json.RawMessage) error
 	return nil
 }
 
-// RegisterRESTRoutes registers all module rest routes
+// RegisterRestRoutes registers all module rest routes
 func (bm BasicManager) RegisterRESTRoutes(ctx context.CLIContext, rtr *mux.Router) {
 	for _, b := range bm {
 		b.RegisterRESTRoutes(ctx, rtr)
 	}
 }
 
-// AddTxCommands adds all tx commands to the rootTxCmd
+// add all tx commands to the rootTxCmd
 func (bm BasicManager) AddTxCommands(rootTxCmd *cobra.Command, cdc *codec.Codec) {
 	for _, b := range bm {
 		if cmd := b.GetTxCmd(cdc); cmd != nil {
@@ -112,7 +109,7 @@ func (bm BasicManager) AddTxCommands(rootTxCmd *cobra.Command, cdc *codec.Codec)
 	}
 }
 
-// AddQueryCommands adds all query commands to the rootQueryCmd
+// add all query commands to the rootQueryCmd
 func (bm BasicManager) AddQueryCommands(rootQueryCmd *cobra.Command, cdc *codec.Codec) {
 	for _, b := range bm {
 		if cmd := b.GetQueryCmd(cdc); cmd != nil {
@@ -122,7 +119,6 @@ func (bm BasicManager) AddQueryCommands(rootQueryCmd *cobra.Command, cdc *codec.
 }
 
 //_________________________________________________________
-
 // AppModuleGenesis is the standard form for an application module genesis functions
 type AppModuleGenesis interface {
 	AppModuleBasic
@@ -143,14 +139,12 @@ type AppModule interface {
 	QuerierRoute() string
 	NewQuerierHandler() sdk.Querier
 
-	// ABCI
 	BeginBlock(sdk.Context, abci.RequestBeginBlock)
 	EndBlock(sdk.Context, abci.RequestEndBlock) []abci.ValidatorUpdate
 }
 
 //___________________________
-
-// GenesisOnlyAppModule is an AppModule that only has import/export functionality
+// app module
 type GenesisOnlyAppModule struct {
 	AppModuleGenesis
 }
@@ -162,32 +156,31 @@ func NewGenesisOnlyAppModule(amg AppModuleGenesis) AppModule {
 	}
 }
 
-// RegisterInvariants is a placeholder function register no invariants
+// register invariants
 func (GenesisOnlyAppModule) RegisterInvariants(_ sdk.InvariantRegistry) {}
 
-// Route empty module message route
+// module message route ngame
 func (GenesisOnlyAppModule) Route() string { return "" }
 
-// NewHandler returns an empty module handler
+// module handler
 func (GenesisOnlyAppModule) NewHandler() sdk.Handler { return nil }
 
-// QuerierRoute returns an empty module querier route
+// module querier route ngame
 func (GenesisOnlyAppModule) QuerierRoute() string { return "" }
 
-// NewQuerierHandler returns an empty module querier
+// module querier
 func (gam GenesisOnlyAppModule) NewQuerierHandler() sdk.Querier { return nil }
 
-// BeginBlock returns an empty module begin-block
+// module begin-block
 func (gam GenesisOnlyAppModule) BeginBlock(ctx sdk.Context, req abci.RequestBeginBlock) {}
 
-// EndBlock returns an empty module end-block
+// module end-block
 func (GenesisOnlyAppModule) EndBlock(_ sdk.Context, _ abci.RequestEndBlock) []abci.ValidatorUpdate {
 	return []abci.ValidatorUpdate{}
 }
 
 //____________________________________________________________________________
-
-// Manager defines a module manager that provides the high level utility for managing and executing
+// module manager provides the high level utility for managing and executing
 // operations for a group of modules
 type Manager struct {
 	Modules            map[string]AppModule
@@ -197,11 +190,11 @@ type Manager struct {
 	OrderEndBlockers   []string
 }
 
-// NewManager creates a new Manager object
+// NewModuleManager creates a new Manager object
 func NewManager(modules ...AppModule) *Manager {
 
 	moduleMap := make(map[string]AppModule)
-	modulesStr := make([]string, 0, len(modules))
+	var modulesStr []string
 	for _, module := range modules {
 		moduleMap[module.Name()] = module
 		modulesStr = append(modulesStr, module.Name())
@@ -216,34 +209,34 @@ func NewManager(modules ...AppModule) *Manager {
 	}
 }
 
-// SetOrderInitGenesis sets the order of init genesis calls
+// set the order of init genesis calls
 func (m *Manager) SetOrderInitGenesis(moduleNames ...string) {
 	m.OrderInitGenesis = moduleNames
 }
 
-// SetOrderExportGenesis sets the order of export genesis calls
+// set the order of export genesis calls
 func (m *Manager) SetOrderExportGenesis(moduleNames ...string) {
 	m.OrderExportGenesis = moduleNames
 }
 
-// SetOrderBeginBlockers sets the order of set begin-blocker calls
+// set the order of set begin-blocker calls
 func (m *Manager) SetOrderBeginBlockers(moduleNames ...string) {
 	m.OrderBeginBlockers = moduleNames
 }
 
-// SetOrderEndBlockers sets the order of set end-blocker calls
+// set the order of set end-blocker calls
 func (m *Manager) SetOrderEndBlockers(moduleNames ...string) {
 	m.OrderEndBlockers = moduleNames
 }
 
-// RegisterInvariants registers all module routes and module querier routes
+// register all module routes and module querier routes
 func (m *Manager) RegisterInvariants(ir sdk.InvariantRegistry) {
 	for _, module := range m.Modules {
 		module.RegisterInvariants(ir)
 	}
 }
 
-// RegisterRoutes registers all module routes and module querier routes
+// register all module routes and module querier routes
 func (m *Manager) RegisterRoutes(router sdk.Router, queryRouter sdk.QueryRouter) {
 	for _, module := range m.Modules {
 		if module.Route() != "" {
@@ -255,7 +248,7 @@ func (m *Manager) RegisterRoutes(router sdk.Router, queryRouter sdk.QueryRouter)
 	}
 }
 
-// InitGenesis performs init genesis functionality for modules
+// perform init genesis functionality for modules
 func (m *Manager) InitGenesis(ctx sdk.Context, genesisData map[string]json.RawMessage) abci.ResponseInitChain {
 	var validatorUpdates []abci.ValidatorUpdate
 	for _, moduleName := range m.OrderInitGenesis {
@@ -278,7 +271,7 @@ func (m *Manager) InitGenesis(ctx sdk.Context, genesisData map[string]json.RawMe
 	}
 }
 
-// ExportGenesis performs export genesis functionality for modules
+// perform export genesis functionality for modules
 func (m *Manager) ExportGenesis(ctx sdk.Context) map[string]json.RawMessage {
 	genesisData := make(map[string]json.RawMessage)
 	for _, moduleName := range m.OrderExportGenesis {
@@ -328,3 +321,5 @@ func (m *Manager) EndBlock(ctx sdk.Context, req abci.RequestEndBlock) abci.Respo
 		Events:           ctx.EventManager().ABCIEvents(),
 	}
 }
+
+// DONTCOVER

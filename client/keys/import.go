@@ -4,9 +4,8 @@ import (
 	"bufio"
 	"io/ioutil"
 
-	"github.com/spf13/cobra"
-
 	"github.com/cosmos/cosmos-sdk/client/input"
+	"github.com/spf13/cobra"
 )
 
 func importKeyCommand() *cobra.Command {

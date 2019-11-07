@@ -90,7 +90,6 @@ func TestListRandom(t *testing.T) {
 	}
 
 	for k, v := range mocklist {
-		k := k
 		var i uint32
 		require.NotPanics(t, func() { list.Get(uint64(k), &i) })
 		require.Equal(t, v, i)

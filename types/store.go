@@ -3,7 +3,6 @@ package types
 import (
 	cmn "github.com/tendermint/tendermint/libs/common"
 
-	"github.com/cosmos/cosmos-sdk/codec"
 	"github.com/cosmos/cosmos-sdk/store/types"
 )
 
@@ -14,21 +13,16 @@ type (
 
 // nolint - reexport
 type (
-	Store                     = types.Store
-	Committer                 = types.Committer
-	CommitStore               = types.CommitStore
-	Queryable                 = types.Queryable
-	MultiStore                = types.MultiStore
-	CacheMultiStore           = types.CacheMultiStore
-	CommitMultiStore          = types.CommitMultiStore
-	MultiStorePersistentCache = types.MultiStorePersistentCache
-	KVStore                   = types.KVStore
-	Iterator                  = types.Iterator
+	Store            = types.Store
+	Committer        = types.Committer
+	CommitStore      = types.CommitStore
+	Queryable        = types.Queryable
+	MultiStore       = types.MultiStore
+	CacheMultiStore  = types.CacheMultiStore
+	CommitMultiStore = types.CommitMultiStore
+	KVStore          = types.KVStore
+	Iterator         = types.Iterator
 )
-
-// StoreDecoderRegistry defines each of the modules store decoders. Used for ImportExport
-// simulation.
-type StoreDecoderRegistry map[string]func(cdc *codec.Codec, kvA, kvB cmn.KVPair) string
 
 // Iterator over all the keys with a certain prefix in ascending order
 func KVStorePrefixIterator(kvs KVStore, prefix []byte) Iterator {
@@ -40,9 +34,10 @@ func KVStoreReversePrefixIterator(kvs KVStore, prefix []byte) Iterator {
 	return types.KVStoreReversePrefixIterator(kvs, prefix)
 }
 
-// DiffKVStores compares two KVstores and returns all the key/value pairs
-// that differ from one another. It also skips value comparison for a set of provided prefixes
-func DiffKVStores(a KVStore, b KVStore, prefixesToSkip [][]byte) (kvAs, kvBs []cmn.KVPair) {
+// Compare two KVstores, return either the first key/value pair
+// at which they differ and whether or not they are equal, skipping
+// value comparison for a set of provided prefixes
+func DiffKVStores(a KVStore, b KVStore, prefixesToSkip [][]byte) (kvA cmn.KVPair, kvB cmn.KVPair, count int64, equal bool) {
 	return types.DiffKVStores(a, b, prefixesToSkip)
 }
 

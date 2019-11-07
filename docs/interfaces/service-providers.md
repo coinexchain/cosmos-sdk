@@ -175,7 +175,7 @@ Signatures and public key examples in a signed transaction:
 
 ``` json
 {
-  "type": "cosmos-sdk/StdTx",
+  "type": "auth/StdTx",
   "value": {
     "msg": [...],
     "signatures": [

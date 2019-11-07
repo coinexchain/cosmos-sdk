@@ -1,7 +1,3 @@
----
-order: 3
----
-
 # SDK Application Architecture
 
 ## State machine 

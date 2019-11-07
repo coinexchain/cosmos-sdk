@@ -24,9 +24,6 @@ var (
 	// functions aliases
 	NewKeeper            = keeper.NewKeeper
 	NewQuerier           = keeper.NewQuerier
-	NewGenesisState      = types.NewGenesisState
-	DefaultGenesisState  = types.DefaultGenesisState
-	ValidateGenesis      = types.ValidateGenesis
 	NewMinter            = types.NewMinter
 	InitialMinter        = types.InitialMinter
 	DefaultInitialMinter = types.DefaultInitialMinter
@@ -48,8 +45,7 @@ var (
 )
 
 type (
-	Keeper       = keeper.Keeper
-	GenesisState = types.GenesisState
-	Minter       = types.Minter
-	Params       = types.Params
+	Keeper = keeper.Keeper
+	Minter = types.Minter
+	Params = types.Params
 )

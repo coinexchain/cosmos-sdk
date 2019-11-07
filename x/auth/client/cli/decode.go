@@ -4,8 +4,8 @@ import (
 	"encoding/base64"
 
 	"github.com/spf13/cobra"
-	"github.com/tendermint/go-amino"
 
+	"github.com/cosmos/cosmos-sdk/codec"
 	"github.com/cosmos/cosmos-sdk/client"
 	"github.com/cosmos/cosmos-sdk/client/context"
 	authtypes "github.com/cosmos/cosmos-sdk/x/auth/types"
@@ -13,7 +13,7 @@ import (
 
 // GetDecodeCommand returns the decode command to take Amino-serialized bytes
 // and turn it into a JSONified transaction.
-func GetDecodeCommand(codec *amino.Codec) *cobra.Command {
+func GetDecodeCommand(codec *codec.Codec) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "decode [amino-byte-string]",
 		Short: "Decode an amino-encoded transaction string",

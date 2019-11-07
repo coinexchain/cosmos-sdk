@@ -1,7 +1,7 @@
 package subspace
 
 import (
-	"fmt"
+	"errors"
 	"reflect"
 
 	"github.com/cosmos/cosmos-sdk/codec"
@@ -145,7 +145,7 @@ func (s Subspace) Modified(ctx sdk.Context, key []byte) bool {
 func (s Subspace) checkType(store sdk.KVStore, key []byte, param interface{}) {
 	attr, ok := s.table.m[string(key)]
 	if !ok {
-		panic(fmt.Sprintf("parameter %s not registered", string(key)))
+		panic("Parameter not registered")
 	}
 
 	ty := attr.ty
@@ -183,7 +183,7 @@ func (s Subspace) Set(ctx sdk.Context, key []byte, param interface{}) {
 func (s Subspace) Update(ctx sdk.Context, key []byte, param []byte) error {
 	attr, ok := s.table.m[string(key)]
 	if !ok {
-		panic(fmt.Sprintf("parameter %s not registered", string(key)))
+		panic("Parameter not registered")
 	}
 
 	ty := attr.ty
@@ -195,8 +195,6 @@ func (s Subspace) Update(ctx sdk.Context, key []byte, param []byte) error {
 	}
 
 	s.Set(ctx, key, dest)
-
-	// TODO: Remove; seems redundant as Set already does this.
 	tStore := s.transientStore(ctx)
 	tStore.Set(key, []byte{})
 
@@ -229,7 +227,7 @@ func (s Subspace) UpdateWithSubkey(ctx sdk.Context, key []byte, subkey []byte, p
 
 	attr, ok := s.table.m[string(concatkey)]
 	if !ok {
-		return fmt.Errorf("parameter %s not registered", string(key))
+		return errors.New("parameter not registered")
 	}
 
 	ty := attr.ty

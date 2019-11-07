@@ -25,7 +25,7 @@ const (
 	flagLimit = "limit"
 )
 
-// GetQueryCmd returns the transaction commands for this module
+// GetTxCmd returns the transaction commands for this module
 func GetQueryCmd(cdc *codec.Codec) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:                        types.ModuleName,
@@ -53,6 +53,10 @@ func GetAccountCmd(cdc *codec.Codec) *cobra.Command {
 
 			key, err := sdk.AccAddressFromBech32(args[0])
 			if err != nil {
+				return err
+			}
+
+			if err := accGetter.EnsureExists(key); err != nil {
 				return err
 			}
 
@@ -161,7 +165,7 @@ func QueryTxCmd(cdc *codec.Codec) *cobra.Command {
 			}
 
 			if output.Empty() {
-				return fmt.Errorf("no transaction found with hash %s", args[0])
+				return fmt.Errorf("No transaction found with hash %s", args[0])
 			}
 
 			return cliCtx.PrintOutput(output)
