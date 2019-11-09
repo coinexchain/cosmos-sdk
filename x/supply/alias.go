@@ -8,7 +8,13 @@ package supply
 import (
 	"github.com/cosmos/cosmos-sdk/x/supply/internal/keeper"
 	"github.com/cosmos/cosmos-sdk/x/supply/internal/types"
+	"github.com/cosmos/cosmos-sdk/codec"
 )
+
+func GetModuleCdc() *codec.Codec {
+	return types.ModuleCdc
+}
+
 
 const (
 	ModuleName   = types.ModuleName
@@ -39,7 +45,6 @@ var (
 
 	// variable aliases
 	DefaultCodespace = keeper.DefaultCodespace
-	ModuleCdc        = types.ModuleCdc
 )
 
 type (

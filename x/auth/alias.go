@@ -7,7 +7,12 @@ package auth
 import (
 	"github.com/cosmos/cosmos-sdk/x/auth/exported"
 	"github.com/cosmos/cosmos-sdk/x/auth/types"
+	"github.com/cosmos/cosmos-sdk/codec"
 )
+
+func GetModuleCdc() *codec.Codec {
+	return types.ModuleCdc
+}
 
 const (
 	ModuleName                    = types.ModuleName
@@ -54,7 +59,6 @@ var (
 	NewAccountRetriever            = types.NewAccountRetriever
 
 	// variable aliases
-	ModuleCdc                 = types.ModuleCdc
 	AddressStoreKeyPrefix     = types.AddressStoreKeyPrefix
 	GlobalAccountNumberKey    = types.GlobalAccountNumberKey
 	KeyMaxMemoCharacters      = types.KeyMaxMemoCharacters

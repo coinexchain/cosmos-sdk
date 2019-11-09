@@ -434,6 +434,8 @@ type storeParams struct {
 //----------------------------------------
 // commitInfo
 
+type CommitInfo = commitInfo
+type StoreInfo = storeInfo
 // NOTE: Keep commitInfo a simple immutable struct.
 type commitInfo struct {
 

@@ -7,6 +7,7 @@ import (
 
 	"github.com/cosmos/cosmos-sdk/client"
 	"github.com/cosmos/cosmos-sdk/codec"
+	"github.com/cosmos/cosmos-sdk/x/slashing/types"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 )
 
@@ -29,7 +30,7 @@ func NewQuerier(k Keeper) sdk.Querier {
 func queryParams(ctx sdk.Context, k Keeper) ([]byte, sdk.Error) {
 	params := k.GetParams(ctx)
 
-	res, err := codec.MarshalJSONIndent(ModuleCdc, params)
+	res, err := codec.MarshalJSONIndent(types.ModuleCdc, params)
 	if err != nil {
 		return nil, sdk.ErrInternal(sdk.AppendMsgToErr("failed to marshal JSON", err.Error()))
 	}
@@ -40,7 +41,7 @@ func queryParams(ctx sdk.Context, k Keeper) ([]byte, sdk.Error) {
 func querySigningInfo(ctx sdk.Context, req abci.RequestQuery, k Keeper) ([]byte, sdk.Error) {
 	var params QuerySigningInfoParams
 
-	err := ModuleCdc.UnmarshalJSON(req.Data, &params)
+	err := types.ModuleCdc.UnmarshalJSON(req.Data, &params)
 	if err != nil {
 		return nil, sdk.ErrInternal(fmt.Sprintf("failed to parse params: %s", err))
 	}
@@ -50,7 +51,7 @@ func querySigningInfo(ctx sdk.Context, req abci.RequestQuery, k Keeper) ([]byte,
 		return nil, ErrNoSigningInfoFound(DefaultCodespace, params.ConsAddress)
 	}
 
-	res, err := codec.MarshalJSONIndent(ModuleCdc, signingInfo)
+	res, err := codec.MarshalJSONIndent(types.ModuleCdc, signingInfo)
 	if err != nil {
 		return nil, sdk.ErrInternal(sdk.AppendMsgToErr("failed to JSON marshal result: %s", err.Error()))
 	}
@@ -61,7 +62,7 @@ func querySigningInfo(ctx sdk.Context, req abci.RequestQuery, k Keeper) ([]byte,
 func querySigningInfos(ctx sdk.Context, req abci.RequestQuery, k Keeper) ([]byte, sdk.Error) {
 	var params QuerySigningInfosParams
 
-	err := ModuleCdc.UnmarshalJSON(req.Data, &params)
+	err := types.ModuleCdc.UnmarshalJSON(req.Data, &params)
 	if err != nil {
 		return nil, sdk.ErrInternal(fmt.Sprintf("failed to parse params: %s", err))
 	}
@@ -80,7 +81,7 @@ func querySigningInfos(ctx sdk.Context, req abci.RequestQuery, k Keeper) ([]byte
 		signingInfos = signingInfos[start:end]
 	}
 
-	res, err := codec.MarshalJSONIndent(ModuleCdc, signingInfos)
+	res, err := codec.MarshalJSONIndent(types.ModuleCdc, signingInfos)
 	if err != nil {
 		return nil, sdk.ErrInternal(sdk.AppendMsgToErr("failed to JSON marshal result: %s", err.Error()))
 	}

@@ -2,6 +2,7 @@ package auth
 
 import (
 	"fmt"
+	"encoding/binary"
 
 	"github.com/tendermint/tendermint/crypto"
 	"github.com/tendermint/tendermint/libs/log"
@@ -157,14 +158,16 @@ func (ak AccountKeeper) GetNextAccountNumber(ctx sdk.Context) uint64 {
 	if bz == nil {
 		accNumber = 0
 	} else {
-		err := ak.cdc.UnmarshalBinaryLengthPrefixed(bz, &accNumber)
-		if err != nil {
-			panic(err)
+		if len(bz) != 8 {
+			panic("Length of GlobalAccountNumberKey is not 8")
 		}
+		accNumber = binary.LittleEndian.Uint64(bz)
 	}
 
-	bz = ak.cdc.MustMarshalBinaryLengthPrefixed(accNumber + 1)
-	store.Set(types.GlobalAccountNumberKey, bz)
+	var buf [8]byte
+	binary.LittleEndian.PutUint64(buf[:], accNumber + 1)
+
+	store.Set(types.GlobalAccountNumberKey, buf[:])
 
 	return accNumber
 }

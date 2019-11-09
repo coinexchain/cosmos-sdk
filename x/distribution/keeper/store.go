@@ -43,6 +43,7 @@ func (k Keeper) IterateDelegatorWithdrawAddrs(ctx sdk.Context, handler func(del 
 
 // get the global fee pool distribution info
 func (k Keeper) GetFeePool(ctx sdk.Context) (feePool types.FeePool) {
+	println("------------------ GetFeePool ")
 	store := ctx.KVStore(k.storeKey)
 	b := store.Get(FeePoolKey)
 	if b == nil {
@@ -54,6 +55,7 @@ func (k Keeper) GetFeePool(ctx sdk.Context) (feePool types.FeePool) {
 
 // set the global fee pool distribution info
 func (k Keeper) SetFeePool(ctx sdk.Context, feePool types.FeePool) {
+	println("------------------ SetFeePool ")
 	store := ctx.KVStore(k.storeKey)
 	b := k.cdc.MustMarshalBinaryLengthPrefixed(feePool)
 	store.Set(FeePoolKey, b)

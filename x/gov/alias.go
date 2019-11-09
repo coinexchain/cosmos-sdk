@@ -6,7 +6,13 @@ package gov
 
 import (
 	"github.com/cosmos/cosmos-sdk/x/gov/types"
+	"github.com/cosmos/cosmos-sdk/codec"
 )
+
+func GetModuleCdc() *codec.Codec {
+	return types.ModuleCdc
+}
+
 
 const (
 	MaxDescriptionLength         = types.MaxDescriptionLength
@@ -116,7 +122,6 @@ var (
 	ValidVoteOption               = types.ValidVoteOption
 
 	// variable aliases
-	ModuleCdc                   = types.ModuleCdc
 	ProposalsKeyPrefix          = types.ProposalsKeyPrefix
 	ActiveProposalQueuePrefix   = types.ActiveProposalQueuePrefix
 	InactiveProposalQueuePrefix = types.InactiveProposalQueuePrefix

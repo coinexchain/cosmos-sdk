@@ -32,7 +32,7 @@ func GetDecodeCommand(codec *codec.Codec) *cobra.Command {
 				return err
 			}
 
-			return cliCtx.PrintOutput(stdTx)
+			return nil
 		},
 	}
 

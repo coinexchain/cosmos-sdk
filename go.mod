@@ -29,4 +29,5 @@ require (
 	github.com/tendermint/tendermint v0.32.7
 	github.com/tendermint/tm-db v0.2.0
 	gopkg.in/yaml.v2 v2.2.2
+	modernc.org/b v1.0.0 // indirect
 )

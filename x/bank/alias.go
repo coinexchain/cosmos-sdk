@@ -7,7 +7,13 @@ package bank
 import (
 	"github.com/cosmos/cosmos-sdk/x/bank/internal/keeper"
 	"github.com/cosmos/cosmos-sdk/x/bank/internal/types"
+	"github.com/cosmos/cosmos-sdk/codec"
 )
+
+func GetModuleCdc() *codec.Codec {
+	return types.ModuleCdc
+}
+
 
 const (
 	DefaultCodespace         = types.DefaultCodespace
@@ -38,7 +44,6 @@ var (
 	ParamKeyTable          = types.ParamKeyTable
 
 	// variable aliases
-	ModuleCdc                = types.ModuleCdc
 	ParamStoreKeySendEnabled = types.ParamStoreKeySendEnabled
 )
 

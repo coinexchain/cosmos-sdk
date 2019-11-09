@@ -34,13 +34,13 @@ func (AppModuleBasic) RegisterCodec(cdc *codec.Codec) {}
 
 // default genesis state
 func (AppModuleBasic) DefaultGenesis() json.RawMessage {
-	return ModuleCdc.MustMarshalJSON(GenesisState{})
+	return types.ModuleCdc.MustMarshalJSON(GenesisState{})
 }
 
 // module validate genesis
 func (AppModuleBasic) ValidateGenesis(bz json.RawMessage) error {
 	var data GenesisState
-	err := ModuleCdc.UnmarshalJSON(bz, &data)
+	err := types.ModuleCdc.UnmarshalJSON(bz, &data)
 	if err != nil {
 		return err
 	}
@@ -90,13 +90,13 @@ func NewAppModule(accountKeeper types.AccountKeeper) module.AppModule {
 // module init-genesis
 func (am AppModule) InitGenesis(ctx sdk.Context, data json.RawMessage) []abci.ValidatorUpdate {
 	var genesisState GenesisState
-	ModuleCdc.MustUnmarshalJSON(data, &genesisState)
-	InitGenesis(ctx, ModuleCdc, am.accountKeeper, genesisState)
+	types.ModuleCdc.MustUnmarshalJSON(data, &genesisState)
+	InitGenesis(ctx, types.ModuleCdc, am.accountKeeper, genesisState)
 	return []abci.ValidatorUpdate{}
 }
 
 // module export genesis
 func (am AppModule) ExportGenesis(ctx sdk.Context) json.RawMessage {
 	gs := ExportGenesis(ctx, am.accountKeeper)
-	return ModuleCdc.MustMarshalJSON(gs)
+	return types.ModuleCdc.MustMarshalJSON(gs)
 }

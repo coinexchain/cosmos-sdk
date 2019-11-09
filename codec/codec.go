@@ -62,12 +62,33 @@ func MustMarshalJSONIndent(cdc *Codec, obj interface{}) []byte {
 }
 
 //__________________________________________________________________
+var initFuncList = make([]func(), 1, 100)
+
+func AddInitFunc(fn func()) {
+	initFuncList = append(initFuncList, fn)
+}
+
+func SetFirstInitFunc(fn func()) {
+	initFuncList[0] = fn
+}
+
+func RunInitFuncList() {
+	for _, fn := range initFuncList {
+		if fn != nil {
+			fn()
+		}
+	}
+	initFuncList = nil
+}
+//__________________________________________________________________
 
 // generic sealed codec to be used throughout sdk
 var Cdc *Codec
 
 func init() {
-	cdc := New()
-	RegisterCrypto(cdc)
-	Cdc = cdc.Seal()
+	AddInitFunc(func() {
+		cdc := New()
+		RegisterCrypto(cdc)
+		Cdc = cdc.Seal()
+	})
 }
