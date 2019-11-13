@@ -7,6 +7,7 @@ import (
 	"github.com/cosmos/cosmos-sdk/x/auth"
 	"github.com/cosmos/cosmos-sdk/x/bank/internal/types"
 	"github.com/cosmos/cosmos-sdk/x/mock"
+	"github.com/cosmos/cosmos-sdk/codec"
 
 	"github.com/stretchr/testify/require"
 
@@ -97,6 +98,7 @@ var (
 )
 
 func TestSendNotEnoughBalance(t *testing.T) {
+	codec.RunInitFuncList()
 	mapp := getMockApp(t)
 	acc := &auth.BaseAccount{
 		Address: addr1,
@@ -128,6 +130,7 @@ func TestSendNotEnoughBalance(t *testing.T) {
 }
 
 func TestSendToModuleAcc(t *testing.T) {
+	codec.RunInitFuncList()
 	mapp := getMockApp(t)
 	acc := &auth.BaseAccount{
 		Address: addr1,
@@ -163,6 +166,7 @@ func TestSendToModuleAcc(t *testing.T) {
 }
 
 func TestMsgMultiSendWithAccounts(t *testing.T) {
+	codec.RunInitFuncList()
 	mapp := getMockApp(t)
 	acc := &auth.BaseAccount{
 		Address: addr1,
@@ -223,6 +227,7 @@ func TestMsgMultiSendWithAccounts(t *testing.T) {
 }
 
 func TestMsgMultiSendMultipleOut(t *testing.T) {
+	codec.RunInitFuncList()
 	mapp := getMockApp(t)
 
 	acc1 := &auth.BaseAccount{
@@ -263,6 +268,7 @@ func TestMsgMultiSendMultipleOut(t *testing.T) {
 }
 
 func TestMsgMultiSendMultipleInOut(t *testing.T) {
+	codec.RunInitFuncList()
 	mapp := getMockApp(t)
 
 	acc1 := &auth.BaseAccount{
@@ -308,6 +314,7 @@ func TestMsgMultiSendMultipleInOut(t *testing.T) {
 }
 
 func TestMsgMultiSendDependent(t *testing.T) {
+	codec.RunInitFuncList()
 	mapp := getMockApp(t)
 
 	acc1 := auth.NewBaseAccountWithAddress(addr1)

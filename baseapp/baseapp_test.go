@@ -79,6 +79,7 @@ func TestMountStores(t *testing.T) {
 // Test that we can make commits and then reload old versions.
 // Test that LoadLatestVersion actually does.
 func TestLoadVersion(t *testing.T) {
+	codec.RunInitFuncList()
 	logger := defaultLogger()
 	pruningOpt := SetPruning(store.PruneSyncable)
 	db := dbm.NewMemDB()
@@ -131,6 +132,7 @@ func TestLoadVersion(t *testing.T) {
 }
 
 func TestAppVersionSetterGetter(t *testing.T) {
+	codec.RunInitFuncList()
 	logger := defaultLogger()
 	pruningOpt := SetPruning(store.PruneSyncable)
 	db := dbm.NewMemDB()
@@ -151,6 +153,7 @@ func TestAppVersionSetterGetter(t *testing.T) {
 }
 
 func TestLoadVersionInvalid(t *testing.T) {
+	codec.RunInitFuncList()
 	logger := log.NewNopLogger()
 	pruningOpt := SetPruning(store.PruneSyncable)
 	db := dbm.NewMemDB()
@@ -193,6 +196,7 @@ func testLoadVersionHelper(t *testing.T, app *BaseApp, expectedHeight int64, exp
 }
 
 func TestOptionFunction(t *testing.T) {
+	codec.RunInitFuncList()
 	logger := defaultLogger()
 	db := dbm.NewMemDB()
 	bap := NewBaseApp("starting name", logger, db, nil, testChangeNameHelper("new name"))
@@ -208,6 +212,7 @@ func testChangeNameHelper(name string) func(*BaseApp) {
 // Test that txs can be unmarshalled and read and that
 // correct error codes are returned when not
 func TestTxDecoder(t *testing.T) {
+	codec.RunInitFuncList()
 	codec := codec.New()
 	registerTestCodec(codec)
 
@@ -224,6 +229,7 @@ func TestTxDecoder(t *testing.T) {
 
 // Test that Info returns the latest committed state.
 func TestInfo(t *testing.T) {
+	codec.RunInitFuncList()
 	app := newBaseApp(t.Name())
 
 	// ----- test an empty response -------
@@ -241,6 +247,7 @@ func TestInfo(t *testing.T) {
 }
 
 func TestBaseAppOptionSeal(t *testing.T) {
+	codec.RunInitFuncList()
 	app := setupBaseApp(t)
 
 	require.Panics(t, func() {
@@ -279,12 +286,14 @@ func TestBaseAppOptionSeal(t *testing.T) {
 }
 
 func TestSetMinGasPrices(t *testing.T) {
+	codec.RunInitFuncList()
 	minGasPrices := sdk.DecCoins{sdk.NewInt64DecCoin("stake", 5000)}
 	app := newBaseApp(t.Name(), SetMinGasPrices(minGasPrices.String()))
 	require.Equal(t, minGasPrices, app.minGasPrices)
 }
 
 func TestInitChainer(t *testing.T) {
+	codec.RunInitFuncList()
 	name := t.Name()
 	// keep the db and logger ourselves so
 	// we can reload the same  app later
@@ -529,6 +538,7 @@ func incrementingCounter(t *testing.T, store sdk.KVStore, counterKey []byte, cou
 // on the store within a block, and that the CheckTx state
 // gets reset to the latest committed state during Commit
 func TestCheckTx(t *testing.T) {
+	codec.RunInitFuncList()
 	// This ante handler reads the key and checks that the value matches the current counter.
 	// This ensures changes to the kvstore persist across successive CheckTx.
 	counterKey := []byte("counter-key")
@@ -576,6 +586,7 @@ func TestCheckTx(t *testing.T) {
 // Test that successive DeliverTx can see each others' effects
 // on the store, both within and across blocks.
 func TestDeliverTx(t *testing.T) {
+	codec.RunInitFuncList()
 	// test increments in the ante
 	anteKey := []byte("ante-key")
 	anteOpt := func(bapp *BaseApp) { bapp.SetAnteHandler(anteHandlerTxTest(t, capKey1, anteKey)) }
@@ -618,12 +629,14 @@ func TestDeliverTx(t *testing.T) {
 
 // Number of messages doesn't matter to CheckTx.
 func TestMultiMsgCheckTx(t *testing.T) {
+	codec.RunInitFuncList()
 	// TODO: ensure we get the same results
 	// with one message or many
 }
 
 // One call to DeliverTx should process all the messages, in order.
 func TestMultiMsgDeliverTx(t *testing.T) {
+	codec.RunInitFuncList()
 	// increment the tx counter
 	anteKey := []byte("ante-key")
 	anteOpt := func(bapp *BaseApp) { bapp.SetAnteHandler(anteHandlerTxTest(t, capKey1, anteKey)) }
@@ -698,6 +711,7 @@ func TestConcurrentCheckDeliver(t *testing.T) {
 // Simulate() and Query("/app/simulate", txBytes) should give
 // the same results.
 func TestSimulateTx(t *testing.T) {
+	codec.RunInitFuncList()
 	gasConsumed := uint64(5)
 
 	anteOpt := func(bapp *BaseApp) {
@@ -761,6 +775,7 @@ func TestSimulateTx(t *testing.T) {
 }
 
 func TestRunInvalidTransaction(t *testing.T) {
+	codec.RunInitFuncList()
 	anteOpt := func(bapp *BaseApp) {
 		bapp.SetAnteHandler(func(ctx sdk.Context, tx sdk.Tx, simulate bool) (newCtx sdk.Context, res sdk.Result, abort bool) {
 			return
@@ -844,6 +859,7 @@ func TestRunInvalidTransaction(t *testing.T) {
 
 // Test that transactions exceeding gas limits fail
 func TestTxGasLimits(t *testing.T) {
+	codec.RunInitFuncList()
 	gasGranted := uint64(10)
 	anteOpt := func(bapp *BaseApp) {
 		bapp.SetAnteHandler(func(ctx sdk.Context, tx sdk.Tx, simulate bool) (newCtx sdk.Context, res sdk.Result, abort bool) {
@@ -929,6 +945,7 @@ func TestTxGasLimits(t *testing.T) {
 
 // Test that transactions exceeding gas limits fail
 func TestMaxBlockGasLimits(t *testing.T) {
+	codec.RunInitFuncList()
 	gasGranted := uint64(10)
 	anteOpt := func(bapp *BaseApp) {
 		bapp.SetAnteHandler(func(ctx sdk.Context, tx sdk.Tx, simulate bool) (newCtx sdk.Context, res sdk.Result, abort bool) {
@@ -1028,6 +1045,7 @@ func TestMaxBlockGasLimits(t *testing.T) {
 }
 
 func TestBaseAppAnteHandler(t *testing.T) {
+	codec.RunInitFuncList()
 	anteKey := []byte("ante-key")
 	anteOpt := func(bapp *BaseApp) {
 		bapp.SetAnteHandler(anteHandlerTxTest(t, capKey1, anteKey))
@@ -1099,6 +1117,7 @@ func TestBaseAppAnteHandler(t *testing.T) {
 }
 
 func TestGasConsumptionBadTx(t *testing.T) {
+	codec.RunInitFuncList()
 	gasWanted := uint64(5)
 	anteOpt := func(bapp *BaseApp) {
 		bapp.SetAnteHandler(func(ctx sdk.Context, tx sdk.Tx, simulate bool) (newCtx sdk.Context, res sdk.Result, abort bool) {
@@ -1175,6 +1194,7 @@ func TestGasConsumptionBadTx(t *testing.T) {
 
 // Test that we can only query from the latest committed state.
 func TestQuery(t *testing.T) {
+	codec.RunInitFuncList()
 	key, value := []byte("hello"), []byte("goodbye")
 	anteOpt := func(bapp *BaseApp) {
 		bapp.SetAnteHandler(func(ctx sdk.Context, tx sdk.Tx, simulate bool) (newCtx sdk.Context, res sdk.Result, abort bool) {
@@ -1232,6 +1252,7 @@ func TestQuery(t *testing.T) {
 
 // Test p2p filter queries
 func TestP2PQuery(t *testing.T) {
+	codec.RunInitFuncList()
 	addrPeerFilterOpt := func(bapp *BaseApp) {
 		bapp.SetAddrPeerFilter(func(addrport string) abci.ResponseQuery {
 			require.Equal(t, "1.1.1.1:8000", addrport)
@@ -1262,6 +1283,7 @@ func TestP2PQuery(t *testing.T) {
 }
 
 func TestGetMaximumBlockGas(t *testing.T) {
+	codec.RunInitFuncList()
 	app := setupBaseApp(t)
 
 	app.setConsensusParams(&abci.ConsensusParams{Block: &abci.BlockParams{MaxGas: 0}})

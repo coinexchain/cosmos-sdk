@@ -13,6 +13,7 @@ import (
 
 	"github.com/cosmos/cosmos-sdk/store/errors"
 	"github.com/cosmos/cosmos-sdk/store/types"
+	"github.com/cosmos/cosmos-sdk/codec"
 )
 
 var (
@@ -46,6 +47,7 @@ func newAlohaTree(t *testing.T, db dbm.DB) (*iavl.MutableTree, types.CommitID) {
 }
 
 func TestGetImmutable(t *testing.T) {
+	codec.RunInitFuncList()
 	db := dbm.NewMemDB()
 	tree, cID := newAlohaTree(t, db)
 	store := UnsafeNewStore(tree, 10, 10)
@@ -76,6 +78,7 @@ func TestGetImmutable(t *testing.T) {
 }
 
 func TestTestGetImmutableIterator(t *testing.T) {
+	codec.RunInitFuncList()
 	db := dbm.NewMemDB()
 	tree, cID := newAlohaTree(t, db)
 	store := UnsafeNewStore(tree, 10, 10)
@@ -99,6 +102,7 @@ func TestTestGetImmutableIterator(t *testing.T) {
 }
 
 func TestIAVLStoreGetSetHasDelete(t *testing.T) {
+	codec.RunInitFuncList()
 	db := dbm.NewMemDB()
 	tree, _ := newAlohaTree(t, db)
 	iavlStore := UnsafeNewStore(tree, numRecent, storeEvery)
@@ -124,6 +128,7 @@ func TestIAVLStoreGetSetHasDelete(t *testing.T) {
 }
 
 func TestIAVLStoreNoNilSet(t *testing.T) {
+	codec.RunInitFuncList()
 	db := dbm.NewMemDB()
 	tree, _ := newAlohaTree(t, db)
 	iavlStore := UnsafeNewStore(tree, numRecent, storeEvery)
@@ -131,6 +136,7 @@ func TestIAVLStoreNoNilSet(t *testing.T) {
 }
 
 func TestIAVLIterator(t *testing.T) {
+	codec.RunInitFuncList()
 	db := dbm.NewMemDB()
 	tree, _ := newAlohaTree(t, db)
 	iavlStore := UnsafeNewStore(tree, numRecent, storeEvery)
@@ -204,6 +210,7 @@ func TestIAVLIterator(t *testing.T) {
 }
 
 func TestIAVLReverseIterator(t *testing.T) {
+	codec.RunInitFuncList()
 	db := dbm.NewMemDB()
 	tree := iavl.NewMutableTree(db, cacheSize)
 	iavlStore := UnsafeNewStore(tree, numRecent, storeEvery)
@@ -235,6 +242,7 @@ func TestIAVLReverseIterator(t *testing.T) {
 }
 
 func TestIAVLPrefixIterator(t *testing.T) {
+	codec.RunInitFuncList()
 	db := dbm.NewMemDB()
 	tree := iavl.NewMutableTree(db, cacheSize)
 	iavlStore := UnsafeNewStore(tree, numRecent, storeEvery)
@@ -297,6 +305,7 @@ func TestIAVLPrefixIterator(t *testing.T) {
 }
 
 func TestIAVLReversePrefixIterator(t *testing.T) {
+	codec.RunInitFuncList()
 	db := dbm.NewMemDB()
 	tree := iavl.NewMutableTree(db, cacheSize)
 	iavlStore := UnsafeNewStore(tree, numRecent, storeEvery)
@@ -363,6 +372,7 @@ func nextVersion(iavl *Store) {
 }
 
 func TestIAVLDefaultPruning(t *testing.T) {
+	codec.RunInitFuncList()
 	//Expected stored / deleted version numbers for:
 	//numRecent = 5, storeEvery = 3
 	var states = []pruneState{
@@ -387,6 +397,7 @@ func TestIAVLDefaultPruning(t *testing.T) {
 }
 
 func TestIAVLAlternativePruning(t *testing.T) {
+	codec.RunInitFuncList()
 	//Expected stored / deleted version numbers for:
 	//numRecent = 3, storeEvery = 5
 	var states = []pruneState{
@@ -435,6 +446,7 @@ func testPruning(t *testing.T, numRecent int64, storeEvery int64, states []prune
 }
 
 func TestIAVLNoPrune(t *testing.T) {
+	codec.RunInitFuncList()
 	db := dbm.NewMemDB()
 	tree := iavl.NewMutableTree(db, cacheSize)
 	iavlStore := UnsafeNewStore(tree, numRecent, int64(1))
@@ -450,6 +462,7 @@ func TestIAVLNoPrune(t *testing.T) {
 }
 
 func TestIAVLPruneEverything(t *testing.T) {
+	codec.RunInitFuncList()
 	db := dbm.NewMemDB()
 	tree := iavl.NewMutableTree(db, cacheSize)
 	iavlStore := UnsafeNewStore(tree, int64(0), int64(0))
@@ -468,6 +481,7 @@ func TestIAVLPruneEverything(t *testing.T) {
 }
 
 func TestIAVLStoreQuery(t *testing.T) {
+	codec.RunInitFuncList()
 	db := dbm.NewMemDB()
 	tree := iavl.NewMutableTree(db, cacheSize)
 	iavlStore := UnsafeNewStore(tree, numRecent, storeEvery)

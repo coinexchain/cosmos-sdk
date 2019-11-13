@@ -12,6 +12,7 @@ import (
 )
 
 func TestDelegationEqual(t *testing.T) {
+	codec.RunInitFuncList()
 	d1 := NewDelegation(sdk.AccAddress(valAddr1), valAddr2, sdk.NewDec(100))
 	d2 := d1
 
@@ -31,6 +32,7 @@ func TestDelegationString(t *testing.T) {
 }
 
 func TestUnbondingDelegationEqual(t *testing.T) {
+	codec.RunInitFuncList()
 	ubd1 := NewUnbondingDelegation(sdk.AccAddress(valAddr1), valAddr2, 0,
 		time.Unix(0, 0), sdk.NewInt(0))
 	ubd2 := ubd1
@@ -46,6 +48,7 @@ func TestUnbondingDelegationEqual(t *testing.T) {
 }
 
 func TestUnbondingDelegationString(t *testing.T) {
+	codec.RunInitFuncList()
 	ubd := NewUnbondingDelegation(sdk.AccAddress(valAddr1), valAddr2, 0,
 		time.Unix(0, 0), sdk.NewInt(0))
 
@@ -53,6 +56,7 @@ func TestUnbondingDelegationString(t *testing.T) {
 }
 
 func TestRedelegationEqual(t *testing.T) {
+	codec.RunInitFuncList()
 	r1 := NewRedelegation(sdk.AccAddress(valAddr1), valAddr2, valAddr3, 0,
 		time.Unix(0, 0), sdk.NewInt(0),
 		sdk.NewDec(0))
@@ -71,6 +75,7 @@ func TestRedelegationEqual(t *testing.T) {
 }
 
 func TestRedelegationString(t *testing.T) {
+	codec.RunInitFuncList()
 	r := NewRedelegation(sdk.AccAddress(valAddr1), valAddr2, valAddr3, 0,
 		time.Unix(0, 0), sdk.NewInt(0),
 		sdk.NewDec(10))
@@ -79,6 +84,7 @@ func TestRedelegationString(t *testing.T) {
 }
 
 func TestDelegationResponses(t *testing.T) {
+	codec.RunInitFuncList()
 	cdc := codec.New()
 	dr1 := NewDelegationResp(sdk.AccAddress(valAddr1), valAddr2, sdk.NewDec(5), sdk.NewInt(5))
 	dr2 := NewDelegationResp(sdk.AccAddress(valAddr1), valAddr3, sdk.NewDec(5), sdk.NewInt(5))
@@ -106,6 +112,7 @@ func TestDelegationResponses(t *testing.T) {
 }
 
 func TestRedelegationResponses(t *testing.T) {
+	codec.RunInitFuncList()
 	cdc := codec.New()
 	entries := []RedelegationEntryResponse{
 		NewRedelegationEntryResponse(0, time.Unix(0, 0), sdk.NewDec(5), sdk.NewInt(5), sdk.NewInt(5)),

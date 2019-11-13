@@ -8,6 +8,7 @@ import (
 
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/cosmos/cosmos-sdk/x/auth"
+	"github.com/cosmos/cosmos-sdk/codec"
 	"github.com/cosmos/cosmos-sdk/x/supply/exported"
 )
 
@@ -50,6 +51,7 @@ func getMockApp(t *testing.T) *App {
 }
 
 func TestCheckAndDeliverGenTx(t *testing.T) {
+	codec.RunInitFuncList()
 	mApp := getMockApp(t)
 	mApp.Cdc.RegisterConcrete(testMsg{}, "mock/testMsg", nil)
 	mApp.Cdc.RegisterInterface((*exported.ModuleAccountI)(nil), nil)
@@ -90,6 +92,7 @@ func TestCheckAndDeliverGenTx(t *testing.T) {
 }
 
 func TestCheckGenTx(t *testing.T) {
+	codec.RunInitFuncList()
 	mApp := getMockApp(t)
 	mApp.Cdc.RegisterConcrete(testMsg{}, "mock/testMsg", nil)
 	mApp.Cdc.RegisterInterface((*exported.ModuleAccountI)(nil), nil)

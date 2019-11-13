@@ -6,6 +6,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"github.com/cosmos/cosmos-sdk/codec"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 )
 
@@ -26,6 +27,7 @@ func init() {
 
 // test ValidateBasic for MsgCreateValidator
 func TestMsgSubmitProposal(t *testing.T) {
+	codec.RunInitFuncList()
 	tests := []struct {
 		title, description string
 		proposalType       string
@@ -60,6 +62,7 @@ func TestMsgSubmitProposal(t *testing.T) {
 }
 
 func TestMsgDepositGetSignBytes(t *testing.T) {
+	codec.RunInitFuncList()
 	addr := sdk.AccAddress("addr1")
 	msg := NewMsgDeposit(addr, 0, coinsPos)
 	res := msg.GetSignBytes()
@@ -70,6 +73,7 @@ func TestMsgDepositGetSignBytes(t *testing.T) {
 
 // test ValidateBasic for MsgDeposit
 func TestMsgDeposit(t *testing.T) {
+	codec.RunInitFuncList()
 	tests := []struct {
 		proposalID    uint64
 		depositorAddr sdk.AccAddress
@@ -94,6 +98,7 @@ func TestMsgDeposit(t *testing.T) {
 
 // test ValidateBasic for MsgDeposit
 func TestMsgVote(t *testing.T) {
+	codec.RunInitFuncList()
 	tests := []struct {
 		proposalID uint64
 		voterAddr  sdk.AccAddress

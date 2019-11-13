@@ -7,12 +7,14 @@ import (
 	"github.com/golang/mock/gomock"
 	"github.com/stretchr/testify/require"
 
+	"github.com/cosmos/cosmos-sdk/codec"
 	"github.com/cosmos/cosmos-sdk/tests/mocks"
 )
 
 var dummyError = errors.New("dummy")
 
 func TestAccountRetriever(t *testing.T) {
+	codec.RunInitFuncList()
 	mockCtrl := gomock.NewController(t)
 	defer mockCtrl.Finish()
 

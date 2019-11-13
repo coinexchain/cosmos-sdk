@@ -7,9 +7,11 @@ import (
 	"github.com/stretchr/testify/require"
 
 	sdk "github.com/cosmos/cosmos-sdk/types"
+	"github.com/cosmos/cosmos-sdk/codec"
 )
 
 func TestMsgSendRoute(t *testing.T) {
+	codec.RunInitFuncList()
 	addr1 := sdk.AccAddress([]byte("from"))
 	addr2 := sdk.AccAddress([]byte("to"))
 	coins := sdk.NewCoins(sdk.NewInt64Coin("atom", 10))
@@ -20,6 +22,7 @@ func TestMsgSendRoute(t *testing.T) {
 }
 
 func TestMsgSendValidation(t *testing.T) {
+	codec.RunInitFuncList()
 	addr1 := sdk.AccAddress([]byte("from"))
 	addr2 := sdk.AccAddress([]byte("to"))
 	atom123 := sdk.NewCoins(sdk.NewInt64Coin("atom", 123))
@@ -52,6 +55,7 @@ func TestMsgSendValidation(t *testing.T) {
 }
 
 func TestMsgSendGetSignBytes(t *testing.T) {
+	codec.RunInitFuncList()
 	addr1 := sdk.AccAddress([]byte("input"))
 	addr2 := sdk.AccAddress([]byte("output"))
 	coins := sdk.NewCoins(sdk.NewInt64Coin("atom", 10))
@@ -63,6 +67,7 @@ func TestMsgSendGetSignBytes(t *testing.T) {
 }
 
 func TestMsgSendGetSigners(t *testing.T) {
+	codec.RunInitFuncList()
 	var msg = NewMsgSend(sdk.AccAddress([]byte("input1")), sdk.AccAddress{}, sdk.NewCoins())
 	res := msg.GetSigners()
 	// TODO: fix this !
@@ -70,6 +75,7 @@ func TestMsgSendGetSigners(t *testing.T) {
 }
 
 func TestMsgMultiSendRoute(t *testing.T) {
+	codec.RunInitFuncList()
 	// Construct a MsgSend
 	addr1 := sdk.AccAddress([]byte("input"))
 	addr2 := sdk.AccAddress([]byte("output"))
@@ -85,6 +91,7 @@ func TestMsgMultiSendRoute(t *testing.T) {
 }
 
 func TestInputValidation(t *testing.T) {
+	codec.RunInitFuncList()
 	addr1 := sdk.AccAddress([]byte{1, 2})
 	addr2 := sdk.AccAddress([]byte{7, 8})
 	someCoins := sdk.NewCoins(sdk.NewInt64Coin("atom", 123))
@@ -123,6 +130,7 @@ func TestInputValidation(t *testing.T) {
 }
 
 func TestOutputValidation(t *testing.T) {
+	codec.RunInitFuncList()
 	addr1 := sdk.AccAddress([]byte{1, 2})
 	addr2 := sdk.AccAddress([]byte{7, 8})
 	someCoins := sdk.NewCoins(sdk.NewInt64Coin("atom", 123))
@@ -161,6 +169,7 @@ func TestOutputValidation(t *testing.T) {
 }
 
 func TestMsgMultiSendValidation(t *testing.T) {
+	codec.RunInitFuncList()
 	addr1 := sdk.AccAddress([]byte{1, 2})
 	addr2 := sdk.AccAddress([]byte{7, 8})
 	atom123 := sdk.NewCoins(sdk.NewInt64Coin("atom", 123))
@@ -215,6 +224,7 @@ func TestMsgMultiSendValidation(t *testing.T) {
 }
 
 func TestMsgMultiSendGetSignBytes(t *testing.T) {
+	codec.RunInitFuncList()
 	addr1 := sdk.AccAddress([]byte("input"))
 	addr2 := sdk.AccAddress([]byte("output"))
 	coins := sdk.NewCoins(sdk.NewInt64Coin("atom", 10))
@@ -229,6 +239,7 @@ func TestMsgMultiSendGetSignBytes(t *testing.T) {
 }
 
 func TestMsgMultiSendGetSigners(t *testing.T) {
+	codec.RunInitFuncList()
 	var msg = MsgMultiSend{
 		Inputs: []Input{
 			NewInput(sdk.AccAddress([]byte("input1")), nil),

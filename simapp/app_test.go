@@ -14,6 +14,7 @@ import (
 )
 
 func TestSimAppExport(t *testing.T) {
+	codec.RunInitFuncList()
 	db := dbm.NewMemDB()
 	app := NewSimApp(log.NewTMLogger(log.NewSyncWriter(os.Stdout)), db, nil, true, 0)
 
@@ -38,6 +39,7 @@ func TestSimAppExport(t *testing.T) {
 
 // ensure that black listed addresses are properly set in bank keeper
 func TestBlackListedAddrs(t *testing.T) {
+	codec.RunInitFuncList()
 	db := dbm.NewMemDB()
 	app := NewSimApp(log.NewTMLogger(log.NewSyncWriter(os.Stdout)), db, nil, true, 0)
 

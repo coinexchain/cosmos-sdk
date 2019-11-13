@@ -6,6 +6,7 @@ import (
 	"github.com/stretchr/testify/require"
 	abci "github.com/tendermint/tendermint/abci/types"
 
+	"github.com/cosmos/cosmos-sdk/codec"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/cosmos/cosmos-sdk/x/auth"
 	"github.com/cosmos/cosmos-sdk/x/bank"
@@ -114,6 +115,7 @@ func checkDelegation(
 }
 
 func TestStakingMsgs(t *testing.T) {
+	codec.RunInitFuncList()
 	mApp, keeper := getMockApp(t)
 
 	genTokens := sdk.TokensFromConsensusPower(42)

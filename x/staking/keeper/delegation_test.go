@@ -4,6 +4,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/cosmos/cosmos-sdk/codec"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/cosmos/cosmos-sdk/x/staking/types"
 
@@ -13,6 +14,7 @@ import (
 
 // tests GetDelegation, GetDelegatorDelegations, SetDelegation, RemoveDelegation, GetDelegatorDelegations
 func TestDelegation(t *testing.T) {
+	codec.RunInitFuncList()
 	ctx, _, keeper, _ := CreateTestInput(t, false, 10)
 
 	//construct the validators

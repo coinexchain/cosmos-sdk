@@ -13,6 +13,7 @@ import (
 	"github.com/tendermint/tendermint/crypto/secp256k1"
 
 	sdk "github.com/cosmos/cosmos-sdk/types"
+	"github.com/cosmos/cosmos-sdk/codec"
 	"github.com/cosmos/cosmos-sdk/x/auth/types"
 )
 
@@ -46,6 +47,7 @@ func checkInvalidTx(t *testing.T, anteHandler sdk.AnteHandler, ctx sdk.Context, 
 
 // Test various error cases in the AnteHandler control flow.
 func TestAnteHandlerSigErrors(t *testing.T) {
+	codec.RunInitFuncList()
 	// setup
 	input := setupTestInput()
 	ctx := input.ctx
@@ -95,6 +97,7 @@ func TestAnteHandlerSigErrors(t *testing.T) {
 
 // Test logic around account number checking with one signer and many signers.
 func TestAnteHandlerAccountNumbers(t *testing.T) {
+	codec.RunInitFuncList()
 	// setup
 	input := setupTestInput()
 	anteHandler := NewAnteHandler(input.ak, input.sk, DefaultSigVerificationGasConsumer)
@@ -152,6 +155,7 @@ func TestAnteHandlerAccountNumbers(t *testing.T) {
 
 // Test logic around account number checking with many signers when BlockHeight is 0.
 func TestAnteHandlerAccountNumbersAtBlockHeightZero(t *testing.T) {
+	codec.RunInitFuncList()
 	// setup
 	input := setupTestInput()
 	anteHandler := NewAnteHandler(input.ak, input.sk, DefaultSigVerificationGasConsumer)
@@ -208,6 +212,7 @@ func TestAnteHandlerAccountNumbersAtBlockHeightZero(t *testing.T) {
 
 // Test logic around sequence checking with one signer and many signers.
 func TestAnteHandlerSequences(t *testing.T) {
+	codec.RunInitFuncList()
 	// setup
 	input := setupTestInput()
 	anteHandler := NewAnteHandler(input.ak, input.sk, DefaultSigVerificationGasConsumer)
@@ -285,6 +290,7 @@ func TestAnteHandlerSequences(t *testing.T) {
 
 // Test logic around fee deduction.
 func TestAnteHandlerFees(t *testing.T) {
+	codec.RunInitFuncList()
 	// setup
 	input := setupTestInput()
 	ctx := input.ctx
@@ -325,6 +331,7 @@ func TestAnteHandlerFees(t *testing.T) {
 
 // Test logic around memo gas consumption.
 func TestAnteHandlerMemoGas(t *testing.T) {
+	codec.RunInitFuncList()
 	// setup
 	input := setupTestInput()
 	anteHandler := NewAnteHandler(input.ak, input.sk, DefaultSigVerificationGasConsumer)
@@ -365,6 +372,7 @@ func TestAnteHandlerMemoGas(t *testing.T) {
 }
 
 func TestAnteHandlerMultiSigner(t *testing.T) {
+	codec.RunInitFuncList()
 	// setup
 	input := setupTestInput()
 	anteHandler := NewAnteHandler(input.ak, input.sk, DefaultSigVerificationGasConsumer)
@@ -415,6 +423,7 @@ func TestAnteHandlerMultiSigner(t *testing.T) {
 }
 
 func TestAnteHandlerBadSignBytes(t *testing.T) {
+	codec.RunInitFuncList()
 	// setup
 	input := setupTestInput()
 	anteHandler := NewAnteHandler(input.ak, input.sk, DefaultSigVerificationGasConsumer)
@@ -492,6 +501,7 @@ func TestAnteHandlerBadSignBytes(t *testing.T) {
 }
 
 func TestAnteHandlerSetPubKey(t *testing.T) {
+	codec.RunInitFuncList()
 	// setup
 	input := setupTestInput()
 	anteHandler := NewAnteHandler(input.ak, input.sk, DefaultSigVerificationGasConsumer)
@@ -544,6 +554,7 @@ func TestAnteHandlerSetPubKey(t *testing.T) {
 }
 
 func TestProcessPubKey(t *testing.T) {
+	codec.RunInitFuncList()
 	input := setupTestInput()
 	ctx := input.ctx
 
@@ -580,6 +591,7 @@ func TestProcessPubKey(t *testing.T) {
 }
 
 func TestConsumeSignatureVerificationGas(t *testing.T) {
+	codec.RunInitFuncList()
 	params := DefaultParams()
 	msg := []byte{1, 2, 3, 4}
 
@@ -655,6 +667,7 @@ func expectedGasCostByKeys(pubkeys []crypto.PubKey) uint64 {
 }
 
 func TestCountSubkeys(t *testing.T) {
+	codec.RunInitFuncList()
 	genPubKeys := func(n int) []crypto.PubKey {
 		var ret []crypto.PubKey
 		for i := 0; i < n; i++ {
@@ -688,6 +701,7 @@ func TestCountSubkeys(t *testing.T) {
 }
 
 func TestAnteHandlerSigLimitExceeded(t *testing.T) {
+	codec.RunInitFuncList()
 	// setup
 	input := setupTestInput()
 	anteHandler := NewAnteHandler(input.ak, input.sk, DefaultSigVerificationGasConsumer)
@@ -725,6 +739,7 @@ func TestAnteHandlerSigLimitExceeded(t *testing.T) {
 }
 
 func TestEnsureSufficientMempoolFees(t *testing.T) {
+	codec.RunInitFuncList()
 	// setup
 	input := setupTestInput()
 	ctx := input.ctx.WithMinGasPrices(
@@ -777,6 +792,7 @@ func TestEnsureSufficientMempoolFees(t *testing.T) {
 
 // Test custom SignatureVerificationGasConsumer
 func TestCustomSignatureVerificationGasConsumer(t *testing.T) {
+	codec.RunInitFuncList()
 	// setup
 	input := setupTestInput()
 	// setup an ante handler that only accepts PubKeyEd25519

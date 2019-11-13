@@ -9,9 +9,11 @@ import (
 
 	"github.com/cosmos/cosmos-sdk/store/iavl"
 	"github.com/cosmos/cosmos-sdk/store/types"
+	"github.com/cosmos/cosmos-sdk/codec"
 )
 
 func TestVerifyIAVLStoreQueryProof(t *testing.T) {
+	codec.RunInitFuncList()
 	// Create main tree for testing.
 	db := dbm.NewMemDB()
 	iStore, err := iavl.LoadStore(db, types.CommitID{}, types.PruneNothing, false)
@@ -55,6 +57,7 @@ func TestVerifyIAVLStoreQueryProof(t *testing.T) {
 }
 
 func TestVerifyMultiStoreQueryProof(t *testing.T) {
+	codec.RunInitFuncList()
 	// Create main tree for testing.
 	db := dbm.NewMemDB()
 	store := NewStore(db)
@@ -110,6 +113,7 @@ func TestVerifyMultiStoreQueryProof(t *testing.T) {
 }
 
 func TestVerifyMultiStoreQueryProofEmptyStore(t *testing.T) {
+	codec.RunInitFuncList()
 	// Create main tree for testing.
 	db := dbm.NewMemDB()
 	store := NewStore(db)
@@ -139,6 +143,7 @@ func TestVerifyMultiStoreQueryProofEmptyStore(t *testing.T) {
 }
 
 func TestVerifyMultiStoreQueryProofAbsence(t *testing.T) {
+	codec.RunInitFuncList()
 	// Create main tree for testing.
 	db := dbm.NewMemDB()
 	store := NewStore(db)

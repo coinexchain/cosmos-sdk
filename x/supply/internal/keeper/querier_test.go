@@ -7,11 +7,13 @@ import (
 	"github.com/stretchr/testify/require"
 	abci "github.com/tendermint/tendermint/abci/types"
 
+	"github.com/cosmos/cosmos-sdk/codec"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/cosmos/cosmos-sdk/x/supply/internal/types"
 )
 
 func TestNewQuerier(t *testing.T) {
+	codec.RunInitFuncList()
 	ctx, _, keeper := createTestInput(t, false, 1000, 2)
 
 	supplyCoins := sdk.NewCoins(
@@ -56,6 +58,7 @@ func TestNewQuerier(t *testing.T) {
 }
 
 func TestQuerySupply(t *testing.T) {
+	codec.RunInitFuncList()
 	ctx, _, keeper := createTestInput(t, false, 1000, 2)
 
 	supplyCoins := sdk.NewCoins(

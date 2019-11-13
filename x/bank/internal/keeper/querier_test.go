@@ -9,11 +9,13 @@ import (
 	abci "github.com/tendermint/tendermint/abci/types"
 
 	sdk "github.com/cosmos/cosmos-sdk/types"
+	"github.com/cosmos/cosmos-sdk/codec"
 	authtypes "github.com/cosmos/cosmos-sdk/x/auth/types"
 	"github.com/cosmos/cosmos-sdk/x/bank/internal/types"
 )
 
 func TestBalances(t *testing.T) {
+	codec.RunInitFuncList()
 	input := setupTestInput()
 	req := abci.RequestQuery{
 		Path: fmt.Sprintf("custom/bank/%s", QueryBalance),
@@ -47,6 +49,7 @@ func TestBalances(t *testing.T) {
 }
 
 func TestQuerierRouteNotFound(t *testing.T) {
+	codec.RunInitFuncList()
 	input := setupTestInput()
 	req := abci.RequestQuery{
 		Path: "custom/bank/notfound",

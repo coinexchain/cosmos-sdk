@@ -7,6 +7,7 @@ import (
 	"github.com/tendermint/tendermint/crypto/ed25519"
 
 	sdk "github.com/cosmos/cosmos-sdk/types"
+	"github.com/cosmos/cosmos-sdk/codec"
 	authtypes "github.com/cosmos/cosmos-sdk/x/auth/types"
 	stakingtypes "github.com/cosmos/cosmos-sdk/x/staking/types"
 )
@@ -17,6 +18,7 @@ var (
 )
 
 func TestValidateGenesisMultipleMessages(t *testing.T) {
+	codec.RunInitFuncList()
 
 	desc := stakingtypes.NewDescription("testname", "", "", "")
 	comm := stakingtypes.CommissionRates{}
@@ -35,6 +37,7 @@ func TestValidateGenesisMultipleMessages(t *testing.T) {
 }
 
 func TestValidateGenesisBadMessage(t *testing.T) {
+	codec.RunInitFuncList()
 	desc := stakingtypes.NewDescription("testname", "", "", "")
 
 	msg1 := stakingtypes.NewMsgEditValidator(sdk.ValAddress(pk1.Address()), desc, nil, nil)

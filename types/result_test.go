@@ -30,6 +30,7 @@ func TestParseABCILog(t *testing.T) {
 }
 
 func TestABCIMessageLog(t *testing.T) {
+	codec.RunInitFuncList()
 	events := Events{NewEvent("transfer", NewAttribute("sender", "foo"))}
 	msgLog := NewABCIMessageLog(0, true, "", events)
 

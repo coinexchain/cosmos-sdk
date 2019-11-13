@@ -27,6 +27,7 @@ import (
 var testMbm = module.NewBasicManager(genutil.AppModuleBasic{})
 
 func TestInitCmd(t *testing.T) {
+	codec.RunInitFuncList()
 	defer server.SetupViper(t)()
 	defer setupClientHome(t)()
 	home, cleanup := tests.NewTestCaseDir(t)
@@ -50,6 +51,7 @@ func setupClientHome(t *testing.T) func() {
 }
 
 func TestEmptyState(t *testing.T) {
+	codec.RunInitFuncList()
 	defer server.SetupViper(t)()
 	defer setupClientHome(t)()
 
@@ -93,6 +95,7 @@ func TestEmptyState(t *testing.T) {
 }
 
 func TestStartStandAlone(t *testing.T) {
+	codec.RunInitFuncList()
 	home, cleanup := tests.NewTestCaseDir(t)
 	defer cleanup()
 	viper.Set(cli.HomeFlag, home)
@@ -123,6 +126,7 @@ func TestStartStandAlone(t *testing.T) {
 }
 
 func TestInitNodeValidatorFiles(t *testing.T) {
+	codec.RunInitFuncList()
 	home, cleanup := tests.NewTestCaseDir(t)
 	defer cleanup()
 	viper.Set(cli.HomeFlag, home)

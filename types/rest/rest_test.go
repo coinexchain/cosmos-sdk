@@ -21,6 +21,7 @@ import (
 type mockResponseWriter struct{}
 
 func TestBaseReqValidateBasic(t *testing.T) {
+	codec.RunInitFuncList()
 	fromAddr := "cosmos1cq0sxam6x4l0sv9yz3a2vlqhdhvt2k6jtgcse0"
 	tenstakes, err := types.ParseCoins("10stake")
 	require.NoError(t, err)
@@ -63,6 +64,7 @@ func TestBaseReqValidateBasic(t *testing.T) {
 }
 
 func TestParseHTTPArgs(t *testing.T) {
+	codec.RunInitFuncList()
 	req0 := mustNewRequest(t, "", "/", nil)
 	req1 := mustNewRequest(t, "", "/?limit=5", nil)
 	req2 := mustNewRequest(t, "", "/?page=5", nil)
@@ -107,6 +109,7 @@ func TestParseHTTPArgs(t *testing.T) {
 }
 
 func TestParseQueryHeight(t *testing.T) {
+	codec.RunInitFuncList()
 	var emptyHeight int64
 	height := int64(1256756)
 
@@ -143,6 +146,7 @@ func TestParseQueryHeight(t *testing.T) {
 }
 
 func TestProcessPostResponse(t *testing.T) {
+	codec.RunInitFuncList()
 	// mock account
 	// PubKey field ensures amino encoding is used first since standard
 	// JSON encoding will panic on crypto.PubKey

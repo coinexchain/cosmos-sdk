@@ -8,11 +8,13 @@ import (
 
 	abci "github.com/tendermint/tendermint/abci/types"
 
+	"github.com/cosmos/cosmos-sdk/codec"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/cosmos/cosmos-sdk/x/staking"
 )
 
 func TestTickExpiredDepositPeriod(t *testing.T) {
+	codec.RunInitFuncList()
 	input := getMockApp(t, 10, GenesisState{}, nil)
 
 	header := abci.Header{Height: input.mApp.LastBlockHeight() + 1}
@@ -62,6 +64,7 @@ func TestTickExpiredDepositPeriod(t *testing.T) {
 }
 
 func TestTickMultipleExpiredDepositPeriod(t *testing.T) {
+	codec.RunInitFuncList()
 	input := getMockApp(t, 10, GenesisState{}, nil)
 
 	header := abci.Header{Height: input.mApp.LastBlockHeight() + 1}
@@ -130,6 +133,7 @@ func TestTickMultipleExpiredDepositPeriod(t *testing.T) {
 }
 
 func TestTickPassedDepositPeriod(t *testing.T) {
+	codec.RunInitFuncList()
 	input := getMockApp(t, 10, GenesisState{}, nil)
 
 	header := abci.Header{Height: input.mApp.LastBlockHeight() + 1}
@@ -178,6 +182,7 @@ func TestTickPassedDepositPeriod(t *testing.T) {
 }
 
 func TestTickPassedVotingPeriod(t *testing.T) {
+	codec.RunInitFuncList()
 	input := getMockApp(t, 10, GenesisState{}, nil)
 	SortAddresses(input.addrs)
 
@@ -240,6 +245,7 @@ func TestTickPassedVotingPeriod(t *testing.T) {
 }
 
 func TestProposalPassedEndblocker(t *testing.T) {
+	codec.RunInitFuncList()
 	input := getMockApp(t, 1, GenesisState{}, nil)
 	SortAddresses(input.addrs)
 
@@ -289,6 +295,7 @@ func TestProposalPassedEndblocker(t *testing.T) {
 }
 
 func TestEndBlockerProposalHandlerFailed(t *testing.T) {
+	codec.RunInitFuncList()
 	input := getMockApp(t, 1, GenesisState{}, nil)
 	SortAddresses(input.addrs)
 

@@ -5,6 +5,7 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"github.com/cosmos/cosmos-sdk/codec"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 	"github.com/cosmos/cosmos-sdk/x/mint/internal/types"
 
@@ -12,6 +13,7 @@ import (
 )
 
 func TestNewQuerier(t *testing.T) {
+	codec.RunInitFuncList()
 	input := newTestInput(t)
 	querier := NewQuerier(input.mintKeeper)
 
@@ -34,6 +36,7 @@ func TestNewQuerier(t *testing.T) {
 }
 
 func TestQueryParams(t *testing.T) {
+	codec.RunInitFuncList()
 	input := newTestInput(t)
 
 	var params types.Params
@@ -48,6 +51,7 @@ func TestQueryParams(t *testing.T) {
 }
 
 func TestQueryInflation(t *testing.T) {
+	codec.RunInitFuncList()
 	input := newTestInput(t)
 
 	var inflation sdk.Dec
@@ -62,6 +66,7 @@ func TestQueryInflation(t *testing.T) {
 }
 
 func TestQueryAnnualProvisions(t *testing.T) {
+	codec.RunInitFuncList()
 	input := newTestInput(t)
 
 	var annualProvisions sdk.Dec

@@ -10,9 +10,11 @@ import (
 
 	"github.com/cosmos/cosmos-sdk/client/flags"
 	"github.com/cosmos/cosmos-sdk/tests"
+	"github.com/cosmos/cosmos-sdk/codec"
 )
 
 func Test_runAddCmdBasic(t *testing.T) {
+	codec.RunInitFuncList()
 	cmd := addKeyCommand()
 	assert.NotNil(t, cmd)
 	mockIn, _, _ := tests.ApplyMockIO(cmd)

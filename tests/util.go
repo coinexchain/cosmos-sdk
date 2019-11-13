@@ -11,11 +11,10 @@ import (
 
 	"github.com/stretchr/testify/require"
 
+	"github.com/tendermint/go-amino"
 	tmclient "github.com/tendermint/tendermint/rpc/client"
 	ctypes "github.com/tendermint/tendermint/rpc/core/types"
 	rpcclient "github.com/tendermint/tendermint/rpc/lib/client"
-
-	"github.com/cosmos/cosmos-sdk/codec"
 )
 
 // Wait for the next tendermint block from the Tendermint RPC
@@ -210,9 +209,10 @@ func NewTestCaseDir(t *testing.T) (string, func()) {
 	return dir, func() { os.RemoveAll(dir) }
 }
 
-var cdc = codec.New()
+var cdc *amino.Codec
 
 func init() {
+	cdc = amino.NewCodec()
 	ctypes.RegisterAmino(cdc)
 }
 
