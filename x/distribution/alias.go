@@ -10,7 +10,13 @@ import (
 	"github.com/cosmos/cosmos-sdk/x/distribution/client"
 	"github.com/cosmos/cosmos-sdk/x/distribution/keeper"
 	"github.com/cosmos/cosmos-sdk/x/distribution/types"
+	"github.com/cosmos/cosmos-sdk/codec"
 )
+
+func GetModuleCdc() *codec.Codec {
+	return types.ModuleCdc
+}
+
 
 const (
 	DefaultParamspace                = keeper.DefaultParamspace
@@ -119,7 +125,6 @@ var (
 	ParamStoreKeyBonusProposerReward     = keeper.ParamStoreKeyBonusProposerReward
 	ParamStoreKeyWithdrawAddrEnabled     = keeper.ParamStoreKeyWithdrawAddrEnabled
 	TestAddrs                            = keeper.TestAddrs
-	ModuleCdc                            = types.ModuleCdc
 	EventTypeSetWithdrawAddress          = types.EventTypeSetWithdrawAddress
 	EventTypeRewards                     = types.EventTypeRewards
 	EventTypeCommission                  = types.EventTypeCommission

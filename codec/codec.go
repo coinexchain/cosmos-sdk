@@ -5,26 +5,34 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/tendermint/go-amino"
-	cryptoamino "github.com/tendermint/tendermint/crypto/encoding/amino"
-	tmtypes "github.com/tendermint/tendermint/types"
+	"github.com/tendermint/tendermint/crypto"
+	"github.com/tendermint/tendermint/crypto/ed25519"
+	"github.com/tendermint/tendermint/crypto/multisig"
+	"github.com/tendermint/tendermint/crypto/secp256k1"
+	amino "github.com/coinexchain/codon/wrap-amino"
 )
+
+func RegisterCrypto(cdc *amino.Codec) {
+	cdc.RegisterInterface((*crypto.PubKey)(nil), nil)
+	cdc.RegisterConcrete(ed25519.PubKeyEd25519{},
+		ed25519.PubKeyAminoName, nil)
+	cdc.RegisterConcrete(secp256k1.PubKeySecp256k1{},
+		secp256k1.PubKeyAminoName, nil)
+	cdc.RegisterConcrete(multisig.PubKeyMultisigThreshold{},
+		multisig.PubKeyMultisigThresholdAminoRoute, nil)
+
+	cdc.RegisterInterface((*crypto.PrivKey)(nil), nil)
+	cdc.RegisterConcrete(ed25519.PrivKeyEd25519{},
+		ed25519.PrivKeyAminoName, nil)
+	cdc.RegisterConcrete(secp256k1.PrivKeySecp256k1{},
+		secp256k1.PrivKeyAminoName, nil)
+}
 
 // amino codec to marshal/unmarshal
 type Codec = amino.Codec
 
 func New() *Codec {
 	return amino.NewCodec()
-}
-
-// Register the go-crypto to the codec
-func RegisterCrypto(cdc *Codec) {
-	cryptoamino.RegisterAmino(cdc)
-}
-
-// RegisterEvidences registers Tendermint evidence types with the provided codec.
-func RegisterEvidences(cdc *Codec) {
-	tmtypes.RegisterEvidences(cdc)
 }
 
 // attempt to make some pretty json
@@ -53,13 +61,33 @@ func MustMarshalJSONIndent(cdc *Codec, obj interface{}) []byte {
 }
 
 //__________________________________________________________________
+var initFuncList = make([]func(), 1, 100)
+
+func AddInitFunc(fn func()) {
+	initFuncList = append(initFuncList, fn)
+}
+
+func SetFirstInitFunc(fn func()) {
+	initFuncList[0] = fn
+}
+
+func RunInitFuncList() {
+	for _, fn := range initFuncList {
+		if fn != nil {
+			fn()
+		}
+	}
+	initFuncList = nil
+}
+//__________________________________________________________________
 
 // generic sealed codec to be used throughout sdk
 var Cdc *Codec
 
 func init() {
-	cdc := New()
-	RegisterCrypto(cdc)
-	RegisterEvidences(cdc)
-	Cdc = cdc.Seal()
+	AddInitFunc(func() {
+		cdc := New()
+		RegisterCrypto(cdc)
+		Cdc = cdc.Seal()
+	})
 }

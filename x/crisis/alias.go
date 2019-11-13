@@ -7,7 +7,13 @@ package crisis
 import (
 	"github.com/cosmos/cosmos-sdk/x/crisis/internal/keeper"
 	"github.com/cosmos/cosmos-sdk/x/crisis/internal/types"
+	"github.com/cosmos/cosmos-sdk/codec"
 )
+
+func GetModuleCdc() *codec.Codec {
+	return types.ModuleCdc
+}
+
 
 const (
 	DefaultCodespace  = types.DefaultCodespace
@@ -33,7 +39,6 @@ var (
 	NewKeeper             = keeper.NewKeeper
 
 	// variable aliases
-	ModuleCdc                = types.ModuleCdc
 	ParamStoreKeyConstantFee = types.ParamStoreKeyConstantFee
 )
 

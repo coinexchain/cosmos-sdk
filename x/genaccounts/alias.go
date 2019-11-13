@@ -6,7 +6,13 @@ package genaccounts
 
 import (
 	"github.com/cosmos/cosmos-sdk/x/genaccounts/internal/types"
+	"github.com/cosmos/cosmos-sdk/codec"
 )
+
+func GetModuleCdc() *codec.Codec {
+	return types.ModuleCdc
+}
+
 
 const (
 	ModuleName = types.ModuleName
@@ -22,7 +28,6 @@ var (
 	ValidateGenesis             = types.ValidateGenesis
 
 	// variable aliases
-	ModuleCdc = types.ModuleCdc
 )
 
 type (

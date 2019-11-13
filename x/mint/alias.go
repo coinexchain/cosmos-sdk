@@ -8,7 +8,13 @@ package mint
 import (
 	"github.com/cosmos/cosmos-sdk/x/mint/internal/keeper"
 	"github.com/cosmos/cosmos-sdk/x/mint/internal/types"
+	"github.com/cosmos/cosmos-sdk/codec"
 )
+
+func GetModuleCdc() *codec.Codec {
+	return types.ModuleCdc
+}
+
 
 const (
 	ModuleName            = types.ModuleName
@@ -34,7 +40,6 @@ var (
 	ValidateParams       = types.ValidateParams
 
 	// variable aliases
-	ModuleCdc              = types.ModuleCdc
 	MinterKey              = types.MinterKey
 	KeyMintDenom           = types.KeyMintDenom
 	KeyInflationRateChange = types.KeyInflationRateChange

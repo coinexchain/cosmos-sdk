@@ -7,9 +7,11 @@ import (
 var cdc *codec.Codec
 
 func init() {
-	cdc = codec.New()
-	codec.RegisterCrypto(cdc)
-	cdc.Seal()
+	codec.AddInitFunc(func() {
+		cdc = codec.New()
+		codec.RegisterCrypto(cdc)
+		cdc.Seal()
+	})
 }
 
 // marshal keys

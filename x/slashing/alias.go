@@ -6,7 +6,13 @@ package slashing
 
 import (
 	"github.com/cosmos/cosmos-sdk/x/slashing/types"
+	"github.com/cosmos/cosmos-sdk/codec"
 )
+
+func GetModuleCdc() *codec.Codec {
+	return types.ModuleCdc
+}
+
 
 const (
 	DefaultCodespace            = types.DefaultCodespace
@@ -56,7 +62,6 @@ var (
 	NewValidatorSigningInfo                  = types.NewValidatorSigningInfo
 
 	// variable aliases
-	ModuleCdc                       = types.ModuleCdc
 	ValidatorSigningInfoKey         = types.ValidatorSigningInfoKey
 	ValidatorMissedBlockBitArrayKey = types.ValidatorMissedBlockBitArrayKey
 	AddrPubkeyRelationKey           = types.AddrPubkeyRelationKey

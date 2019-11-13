@@ -13,10 +13,12 @@ var ModuleCdc *codec.Codec
 // TODO: abstract genesis transactions registration back to staking
 // required for genesis transactions
 func init() {
-	ModuleCdc = codec.New()
-	stakingtypes.RegisterCodec(ModuleCdc)
-	authtypes.RegisterCodec(ModuleCdc)
-	sdk.RegisterCodec(ModuleCdc)
-	codec.RegisterCrypto(ModuleCdc)
-	ModuleCdc.Seal()
+	codec.AddInitFunc(func() {
+		ModuleCdc = codec.New()
+		stakingtypes.RegisterCodec(ModuleCdc)
+		authtypes.RegisterCodec(ModuleCdc)
+		sdk.RegisterCodec(ModuleCdc)
+		codec.RegisterCrypto(ModuleCdc)
+		ModuleCdc.Seal()
+	})
 }

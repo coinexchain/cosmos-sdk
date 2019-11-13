@@ -8,7 +8,13 @@ package params
 import (
 	"github.com/cosmos/cosmos-sdk/x/params/subspace"
 	"github.com/cosmos/cosmos-sdk/x/params/types"
+	"github.com/cosmos/cosmos-sdk/codec"
 )
+
+func GetModuleCdc() *codec.Codec {
+	return types.ModuleCdc
+}
+
 
 const (
 	StoreKey             = subspace.StoreKey
@@ -41,7 +47,6 @@ var (
 	ValidateChanges            = types.ValidateChanges
 
 	// variable aliases
-	ModuleCdc = types.ModuleCdc
 )
 
 type (

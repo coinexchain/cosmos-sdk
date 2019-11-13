@@ -8,7 +8,9 @@ import (
 var ModuleCdc *codec.Codec
 
 func init() {
-	ModuleCdc = codec.New()
-	codec.RegisterCrypto(ModuleCdc)
-	ModuleCdc.Seal()
+	codec.AddInitFunc(func() {
+		ModuleCdc = codec.New()
+		codec.RegisterCrypto(ModuleCdc)
+		ModuleCdc.Seal()
+	})
 }

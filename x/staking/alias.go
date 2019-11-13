@@ -10,7 +10,13 @@ import (
 	"github.com/cosmos/cosmos-sdk/x/staking/exported"
 	"github.com/cosmos/cosmos-sdk/x/staking/keeper"
 	"github.com/cosmos/cosmos-sdk/x/staking/types"
+	"github.com/cosmos/cosmos-sdk/codec"
 )
+
+func GetModuleCdc() *codec.Codec {
+	return types.ModuleCdc
+}
+
 
 const (
 	DefaultParamspace                  = keeper.DefaultParamspace
@@ -181,7 +187,6 @@ var (
 	NewDescription                     = types.NewDescription
 
 	// variable aliases
-	ModuleCdc                        = types.ModuleCdc
 	LastValidatorPowerKey            = types.LastValidatorPowerKey
 	LastTotalPowerKey                = types.LastTotalPowerKey
 	ValidatorsKey                    = types.ValidatorsKey

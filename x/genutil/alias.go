@@ -6,7 +6,13 @@ package genutil
 
 import (
 	"github.com/cosmos/cosmos-sdk/x/genutil/types"
+	"github.com/cosmos/cosmos-sdk/codec"
 )
+
+func GetModuleCdc() *codec.Codec {
+	return types.ModuleCdc
+}
+
 
 const (
 	ModuleName = types.ModuleName
@@ -23,8 +29,6 @@ var (
 	GenesisStateFromGenFile     = types.GenesisStateFromGenFile
 	ValidateGenesis             = types.ValidateGenesis
 
-	// variable aliases
-	ModuleCdc = types.ModuleCdc
 )
 
 type (
