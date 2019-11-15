@@ -7,6 +7,7 @@ require (
 	github.com/bgentry/speakeasy v0.1.0
 	github.com/btcsuite/btcd v0.0.0-20190115013929-ed77733ec07d
 	github.com/coinexchain/codon v0.0.0-20191012070227-3ee72dde596c
+	github.com/coinexchain/randsrc v0.1.0
 	github.com/cosmos/go-bip39 v0.0.0-20180618194314-52158e4697b8
 	github.com/cosmos/ledger-cosmos-go v0.10.3
 	github.com/gogo/protobuf v1.3.0
@@ -33,3 +34,5 @@ require (
 )
 
 replace github.com/coinexchain/codon => ../codon
+
+replace github.com/coinexchain/randsrc v0.1.0 => ../randsrc
