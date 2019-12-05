@@ -92,6 +92,9 @@ type BaseApp struct {
 
 	// application's version string
 	appVersion string
+
+	//application's checkTx option
+	checkTxWithMsgHandle bool
 }
 
 var _ abci.Application = (*BaseApp)(nil)
@@ -782,7 +785,8 @@ func (app *BaseApp) runMsgs(ctx sdk.Context, msgs []sdk.Msg, mode runTxMode) (re
 		var msgResult sdk.Result
 
 		// skip actual execution for CheckTx mode
-		if mode != runTxModeCheck {
+		// skip actual execution for CheckTx and ReCheckTx mode
+		if mode != runTxModeCheck || app.checkTxWithMsgHandle {
 			msgResult = handler(ctx, msg)
 		}
 
@@ -960,7 +964,7 @@ func (app *BaseApp) runTx(mode runTxMode, txBytes []byte, tx sdk.Tx) (result sdk
 	result.GasWanted = gasWanted
 
 	// Safety check: don't write the cache state unless we're in DeliverTx.
-	if mode != runTxModeDeliver {
+	if mode != runTxModeDeliver && (mode != runTxModeCheck || !app.checkTxWithMsgHandle) {
 		return result
 	}
 

@@ -38,6 +38,19 @@ func SetHaltTime(haltTime uint64) func(*BaseApp) {
 	return func(bap *BaseApp) { bap.setHaltTime(haltTime) }
 }
 
+func SetCheckTxWithMsgHandle(checkTxWithMsgHandle bool) func(*BaseApp) {
+	return func(bap *BaseApp) {
+		bap.checkTxWithMsgHandle = checkTxWithMsgHandle
+	}
+}
+
+func (app *BaseApp) SetCheckTxWithMsgHandle(checkTxWithMsgHandle bool) {
+	if app.sealed {
+		panic("SetName() on sealed BaseApp")
+	}
+	app.checkTxWithMsgHandle = checkTxWithMsgHandle
+}
+
 func (app *BaseApp) SetName(name string) {
 	if app.sealed {
 		panic("SetName() on sealed BaseApp")

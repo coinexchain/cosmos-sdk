@@ -20,14 +20,15 @@ import (
 
 // Tendermint full-node start flags
 const (
-	flagWithTendermint = "with-tendermint"
-	flagAddress        = "address"
-	flagTraceStore     = "trace-store"
-	flagPruning        = "pruning"
-	flagCPUProfile     = "cpu-profile"
-	FlagMinGasPrices   = "minimum-gas-prices"
-	FlagHaltHeight     = "halt-height"
-	FlagHaltTime       = "halt-time"
+	flagWithTendermint       = "with-tendermint"
+	flagAddress              = "address"
+	flagTraceStore           = "trace-store"
+	flagPruning              = "pruning"
+	flagCPUProfile           = "cpu-profile"
+	FlagMinGasPrices         = "minimum-gas-prices"
+	FlagHaltHeight           = "halt-height"
+	FlagHaltTime             = "halt-time"
+	FlagCheckTxWithMsgHandle = "check-tx-with-msg-handle"
 )
 
 // StartCmd runs the service passed in, either stand-alone or in-process with
@@ -79,7 +80,8 @@ which accepts a path for the resulting pprof file.
 	cmd.Flags().Uint64(FlagHaltHeight, 0, "Height at which to gracefully halt the chain and shutdown the node")
 	cmd.Flags().Uint64(FlagHaltTime, 0, "Minimum block time (in Unix seconds) at which to gracefully halt the chain and shutdown the node")
 	cmd.Flags().String(flagCPUProfile, "", "Enable CPU profiling and write to the provided file")
-
+	// add support for checkTx behaviour options
+	cmd.Flags().Bool(FlagCheckTxWithMsgHandle, false, "Check tx with handling msg when set true")
 	// add support for all Tendermint-specific command line options
 	tcmd.AddNodeFlags(cmd)
 	return cmd
