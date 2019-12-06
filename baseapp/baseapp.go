@@ -94,6 +94,7 @@ type BaseApp struct {
 	appVersion string
 
 	//application's checkTx option
+	//It is intended for wallet operator, validator isn't supposed to set it.
 	checkTxWithMsgHandle bool
 }
 
@@ -687,7 +688,7 @@ func (app *BaseApp) BeginBlock(req abci.RequestBeginBlock) (res abci.ResponseBeg
 // whether or not a transaction can possibly be executed, first decoding and then
 // the ante handler (which checks signatures/fees/ValidateBasic).
 //
-// NOTE:CheckTx does not run the actual Msg handler function(s).
+// NOTE:if app.checkTxWithMsgHandle not set, checkTx does not run the actual Msg handler function(s).
 func (app *BaseApp) CheckTx(req abci.RequestCheckTx) (res abci.ResponseCheckTx) {
 	var result sdk.Result
 
@@ -695,6 +696,13 @@ func (app *BaseApp) CheckTx(req abci.RequestCheckTx) (res abci.ResponseCheckTx) 
 	if err != nil {
 		result = err.Result()
 	} else {
+		if app.checkTxWithMsgHandle && req.Type == abci.CheckTxType_Recheck {
+
+			// when checkTxWithMsgHandle is true, all rechecktx operations fail
+			// and mempool will be reset.
+			res.Code = uint32(sdk.CodeMempoolReset)
+			return
+		}
 		result = app.runTx(runTxModeCheck, req.Tx, tx)
 	}
 
@@ -964,7 +972,7 @@ func (app *BaseApp) runTx(mode runTxMode, txBytes []byte, tx sdk.Tx) (result sdk
 	result.GasWanted = gasWanted
 
 	// Safety check: don't write the cache state unless we're in DeliverTx.
-	if mode != runTxModeDeliver && (mode != runTxModeCheck || !app.checkTxWithMsgHandle) {
+	if mode != runTxModeDeliver {
 		return result
 	}
 
