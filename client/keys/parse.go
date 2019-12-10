@@ -17,7 +17,7 @@ import (
 	sdk "github.com/cosmos/cosmos-sdk/types"
 )
 
-var bech32Prefixes = []string{
+var Bech32Prefixes = []string{
 	sdk.Bech32PrefixAccAddr,
 	sdk.Bech32PrefixAccPub,
 	sdk.Bech32PrefixValAddr,
@@ -44,8 +44,8 @@ type bech32Output struct {
 }
 
 func newBech32Output(bs []byte) bech32Output {
-	out := bech32Output{Formats: make([]string, len(bech32Prefixes))}
-	for i, prefix := range bech32Prefixes {
+	out := bech32Output{Formats: make([]string, len(Bech32Prefixes))}
+	for i, prefix := range Bech32Prefixes {
 		bech32Addr, err := bech32.ConvertAndEncode(prefix, bs)
 		if err != nil {
 			panic(err)
