@@ -110,25 +110,34 @@ const MaxSliceLength = 10
 const MaxStringLength = 100
 
 var extraLogicsForLeafTypes = `
-
 func init() {
 	codec.SetFirstInitFunc(func() {
 		amino.Stub = &CodonStub{}
 	})
 }
-func EncodeTime(w *[]byte, t time.Time) {
+func EncodeTime(t time.Time) []byte {
 	t = t.UTC()
 	sec := t.Unix()
-	var buf [10]byte
+	var buf [20]byte
 	n := binary.PutVarint(buf[:], sec)
-	*w = append(*w, buf[0:n]...)
 
 	nanosec := t.Nanosecond()
-	n = binary.PutVarint(buf[:], int64(nanosec))
-	*w = append(*w, buf[0:n]...)
+	m := binary.PutVarint(buf[n:], int64(nanosec))
+	return buf[:n+m]
 }
 
-func DecodeTime(bz []byte) (time.Time, int, error) {
+func DecodeTime(bz []byte) (t time.Time, m int, err error) {
+	var bs []byte
+	n, err := codonGetByteSlice(&bs, bz)
+	if err != nil {
+		return
+	}
+	t, m, err = DecodeTimeHelp(bs)
+	m += n
+	return
+}
+
+func DecodeTimeHelp(bz []byte) (time.Time, int, error) {
 	sec, n := binary.Varint(bz)
 	var err error
 	if n == 0 {
@@ -161,7 +170,7 @@ func DecodeTime(bz []byte) (time.Time, int, error) {
 	return time.Unix(sec, nanosec).UTC(), n+m, nil
 }
 
-func T(s string) time.Time {
+func StringToTime(s string) time.Time {
 	t, err := time.Parse(time.RFC3339, s)
 	if err != nil {
 		panic(err)
@@ -169,7 +178,7 @@ func T(s string) time.Time {
 	return t
 }
 
-var maxSec = T("9999-09-29T08:02:06.647266Z").Unix()
+var maxSec = StringToTime("9999-09-29T08:02:06.647266Z").Unix()
 
 func RandTime(r RandSrc) time.Time {
 	sec := r.GetInt64()
@@ -190,30 +199,33 @@ func DeepCopyTime(t time.Time) time.Time {
 	return t.Add(time.Duration(0))
 }
 
-func EncodeInt(w *[]byte, v sdk.Int) {
-	codonEncodeByteSlice(w, v.BigInt().Bytes())
-	codonEncodeBool(w, v.BigInt().Sign() < 0)
+func ByteSliceWithLengthPrefix(bz []byte) []byte {
+	buf := make([]byte, binary.MaxVarintLen64+len(bz))
+	n := binary.PutUvarint(buf[:], uint64(len(bz)))
+	return append(buf[0:n], bz...)
+}
+
+func EncodeInt(v sdk.Int) []byte {
+	bz := v.BigInt().Bytes()
+	res := ByteSliceWithLengthPrefix(bz)
+
+	b := byte(0)
+	if v.BigInt().Sign() < 0 {
+		b = byte(1)
+	}
+	res = append(res, b)
+	return res
 }
 
 func DecodeInt(bz []byte) (v sdk.Int, n int, err error) {
-	var m int
-	length := codonDecodeInt64(bz, &m, &err)
-	if err != nil {
-		return
-	}
 	var bs []byte
-	var l int
-	bs, l, err = codonGetByteSlice(bz[m:], int(length))
-	n = m + l
+	n, err = codonGetByteSlice(&bs, bz)
 	if err != nil {
 		return
 	}
 	var k int
 	isNeg := codonDecodeBool(bz[n:], &k, &err)
 	n = n + 1
-	if err != nil {
-		return
-	}
 	x := big.NewInt(0)
 	z := big.NewInt(0)
 	x.SetBytes(bs)
@@ -239,21 +251,21 @@ func DeepCopyInt(i sdk.Int) sdk.Int {
 	return i.AddRaw(0)
 }
 
-func EncodeDec(w *[]byte, v sdk.Dec) {
-	codonEncodeByteSlice(w, v.Int.Bytes())
-	codonEncodeBool(w, v.Int.Sign() < 0)
+func EncodeDec(v sdk.Dec) []byte {
+	bz := v.Int.Bytes()
+	res := ByteSliceWithLengthPrefix(bz)
+
+	b := byte(0)
+	if v.Int.Sign() < 0 {
+		b = byte(1)
+	}
+	res = append(res, b)
+	return res
 }
 
 func DecodeDec(bz []byte) (v sdk.Dec, n int, err error) {
-	var m int
-	length := codonDecodeInt64(bz, &m, &err)
-	if err != nil {
-		return
-	}
 	var bs []byte
-	var l int
-	bs, l, err = codonGetByteSlice(bz[m:], int(length))
-	n = m + l
+	n, err = codonGetByteSlice(&bs, bz)
 	if err != nil {
 		return
 	}
@@ -284,5 +296,6 @@ func RandDec(r RandSrc) sdk.Dec {
 func DeepCopyDec(d sdk.Dec) sdk.Dec {
 	return d.MulInt64(1)
 }
+
 
 `

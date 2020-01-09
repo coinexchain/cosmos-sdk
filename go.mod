@@ -33,6 +33,6 @@ require (
 	gopkg.in/yaml.v2 v2.2.2
 )
 
-replace github.com/coinexchain/codon => ../codon
+replace github.com/coinexchain/codon => ../../coinexchain/codon
 
-replace github.com/coinexchain/randsrc v0.1.0 => ../randsrc
+replace github.com/coinexchain/randsrc v0.1.0 => ../../coinexchain/randsrc

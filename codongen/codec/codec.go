@@ -10,7 +10,6 @@ sdk "github.com/cosmos/cosmos-sdk/types"
 "reflect"
 amino "github.com/coinexchain/codon/wrap-amino"
 "encoding/binary"
-"math"
 "errors"
 )
 
@@ -32,55 +31,57 @@ type RandSrc interface {
 	GetBytes(n int) []byte
 }
 
-func codonEncodeBool(w *[]byte, v bool) {
-	if v {
-		*w = append(*w, byte(1))
-	} else {
-		*w = append(*w, byte(0))
-	}
-}
-func codonEncodeVarint(w *[]byte, v int64) {
+func codonWriteVarint(w *[]byte, v int64) {
 	var buf [binary.MaxVarintLen64]byte
 	n := binary.PutVarint(buf[:], v)
 	*w = append(*w, buf[0:n]...)
 }
-func codonEncodeInt8(w *[]byte, v int8) {
-	*w = append(*w, byte(v))
-}
-func codonEncodeInt16(w *[]byte, v int16) {
-	var buf [2]byte
-	binary.LittleEndian.PutUint16(buf[:], uint16(v))
-	*w = append(*w, buf[:]...)
-}
-func codonEncodeUvarint(w *[]byte, v uint64) {
+func codonWriteUvarint(w *[]byte, v uint64) {
 	var buf [binary.MaxVarintLen64]byte
 	n := binary.PutUvarint(buf[:], v)
 	*w = append(*w, buf[0:n]...)
 }
-func codonEncodeUint8(w *[]byte, v uint8) {
-	*w = append(*w, byte(v))
+
+func codonEncodeBool(n int, w *[]byte, v bool) {
+	codonWriteUvarint(w, uint64(n)<<3)
+	if v {
+		codonWriteUvarint(w, uint64(1))
+	} else {
+		codonWriteUvarint(w, uint64(0))
+	}
 }
-func codonEncodeUint16(w *[]byte, v uint16) {
-	var buf [2]byte
-	binary.LittleEndian.PutUint16(buf[:], v)
-	*w = append(*w, buf[:]...)
+func codonEncodeVarint(n int, w *[]byte, v int64) {
+	codonWriteUvarint(w, uint64(n)<<3)
+	codonWriteVarint(w, int64(v))
 }
-func codonEncodeFloat32(w *[]byte, v float32) {
-	var buf [4]byte
-	binary.LittleEndian.PutUint32(buf[:], math.Float32bits(v))
-	*w = append(*w, buf[:]...)
+func codonEncodeInt8(n int, w *[]byte, v int8) {
+	codonWriteUvarint(w, uint64(n)<<3)
+	codonWriteVarint(w, int64(v))
 }
-func codonEncodeFloat64(w *[]byte, v float64) {
-	var buf [8]byte
-	binary.LittleEndian.PutUint64(buf[:], math.Float64bits(v))
-	*w = append(*w, buf[:]...)
+func codonEncodeInt16(n int, w *[]byte, v int16) {
+	codonWriteUvarint(w, uint64(n)<<3)
+	codonWriteVarint(w, int64(v))
 }
-func codonEncodeByteSlice(w *[]byte, v []byte) {
-	codonEncodeVarint(w, int64(len(v)))
+func codonEncodeUvarint(n int, w *[]byte, v uint64) {
+	codonWriteUvarint(w, uint64(n)<<3)
+	codonWriteUvarint(w, v)
+}
+func codonEncodeUint8(n int, w *[]byte, v uint8) {
+	codonWriteUvarint(w, uint64(n)<<3)
+	codonWriteUvarint(w, uint64(v))
+}
+func codonEncodeUint16(n int, w *[]byte, v uint16) {
+	codonWriteUvarint(w, uint64(n)<<3)
+	codonWriteUvarint(w, uint64(v))
+}
+
+func codonEncodeByteSlice(n int, w *[]byte, v []byte) {
+	codonWriteUvarint(w, (uint64(n)<<3)|2)
+	codonWriteVarint(w, int64(len(v)))
 	*w = append(*w, v...)
 }
-func codonEncodeString(w *[]byte, v string) {
-	codonEncodeByteSlice(w, []byte(v))
+func codonEncodeString(n int, w *[]byte, v string) {
+	codonEncodeByteSlice(n, w, []byte(v))
 }
 func codonDecodeBool(bz []byte, n *int, err *error) bool {
 	if len(bz) < 1 {
@@ -183,48 +184,37 @@ func codonDecodeUint64(bz []byte, m *int, err *error) uint64 {
 	*err = nil
 	return uint64(i)
 }
-func codonDecodeFloat64(bz []byte, n *int, err *error) float64 {
-	if len(bz) < 8 {
-		*err = errors.New("Not enough bytes to read")
-		return 0
+func codonGetByteSlice(res *[]byte, bz []byte) (int, error) {
+	length, n := binary.Uvarint(bz)
+	if n == 0 {
+		// buf too small
+		return n, errors.New("buffer too small")
+	} else if n < 0 {
+		// value larger than 64 bits (overflow)
+		// and -n is the number of bytes read
+		n = -n
+		return n, errors.New("EOF decoding varint")
 	}
-	*n = 8
-	*err = nil
-	i := binary.LittleEndian.Uint64(bz[:8])
-	return math.Float64frombits(i)
-}
-func codonDecodeFloat32(bz []byte, n *int, err *error) float32 {
-	if len(bz) < 4 {
-		*err = errors.New("Not enough bytes to read")
-		return 0
-	}
-	*n = 4
-	*err = nil
-	i := binary.LittleEndian.Uint32(bz[:4])
-	return math.Float32frombits(i)
-}
-func codonGetByteSlice(bz []byte, length int) ([]byte, int, error) {
 	if length == 0 {
-		return nil, 0, nil
+		*res = nil
+		return 0, nil
 	}
-	if len(bz) < length {
-		return nil, 0, errors.New("Not enough bytes to read")
+	bz = bz[n:]
+	if len(bz) < int(length) {
+		*res = nil
+		return 0, errors.New("Not enough bytes to read")
 	}
-	res := make([]byte, length)
-	copy(res, bz[:length])
-	return res, length, nil
+	if *res == nil {
+		*res = append(*res, bz[:length]...)
+	} else {
+		*res = append((*res)[:0], bz[:length]...)
+	}
+	return n+int(length), nil
 }
 func codonDecodeString(bz []byte, n *int, err *error) string {
-	var m int
-	length := codonDecodeInt64(bz, &m, err)
-	if *err != nil {
-		return ""
-	}
-	var bs []byte
-	var l int
-	bs, l, *err = codonGetByteSlice(bz[m:], int(length))
-	*n = m + l
-	return string(bs)
+	var res *[]byte
+	*n, *err = codonGetByteSlice(res, bz)
+	return string(*res)
 }
 
 
@@ -233,19 +223,29 @@ func init() {
 		amino.Stub = &CodonStub{}
 	})
 }
-func EncodeTime(w *[]byte, t time.Time) {
+func EncodeTime(t time.Time) []byte {
 	t = t.UTC()
 	sec := t.Unix()
-	var buf [10]byte
+	var buf [20]byte
 	n := binary.PutVarint(buf[:], sec)
-	*w = append(*w, buf[0:n]...)
 
 	nanosec := t.Nanosecond()
-	n = binary.PutVarint(buf[:], int64(nanosec))
-	*w = append(*w, buf[0:n]...)
+	m := binary.PutVarint(buf[n:], int64(nanosec))
+	return buf[:n+m]
 }
 
-func DecodeTime(bz []byte) (time.Time, int, error) {
+func DecodeTime(bz []byte) (t time.Time, m int, err error) {
+	var bs []byte
+	n, err := codonGetByteSlice(&bs, bz)
+	if err != nil {
+		return
+	}
+	t, m, err = DecodeTimeHelp(bs)
+	m += n
+	return
+}
+
+func DecodeTimeHelp(bz []byte) (time.Time, int, error) {
 	sec, n := binary.Varint(bz)
 	var err error
 	if n == 0 {
@@ -278,7 +278,7 @@ func DecodeTime(bz []byte) (time.Time, int, error) {
 	return time.Unix(sec, nanosec).UTC(), n+m, nil
 }
 
-func T(s string) time.Time {
+func StringToTime(s string) time.Time {
 	t, err := time.Parse(time.RFC3339, s)
 	if err != nil {
 		panic(err)
@@ -286,7 +286,7 @@ func T(s string) time.Time {
 	return t
 }
 
-var maxSec = T("9999-09-29T08:02:06.647266Z").Unix()
+var maxSec = StringToTime("9999-09-29T08:02:06.647266Z").Unix()
 
 func RandTime(r RandSrc) time.Time {
 	sec := r.GetInt64()
@@ -307,30 +307,33 @@ func DeepCopyTime(t time.Time) time.Time {
 	return t.Add(time.Duration(0))
 }
 
-func EncodeInt(w *[]byte, v sdk.Int) {
-	codonEncodeByteSlice(w, v.BigInt().Bytes())
-	codonEncodeBool(w, v.BigInt().Sign() < 0)
+func ByteSliceWithLengthPrefix(bz []byte) []byte {
+	buf := make([]byte, binary.MaxVarintLen64+len(bz))
+	n := binary.PutUvarint(buf[:], uint64(len(bz)))
+	return append(buf[0:n], bz...)
+}
+
+func EncodeInt(v sdk.Int) []byte {
+	bz := v.BigInt().Bytes()
+	res := ByteSliceWithLengthPrefix(bz)
+
+	b := byte(0)
+	if v.BigInt().Sign() < 0 {
+		b = byte(1)
+	}
+	res = append(res, b)
+	return res
 }
 
 func DecodeInt(bz []byte) (v sdk.Int, n int, err error) {
-	var m int
-	length := codonDecodeInt64(bz, &m, &err)
-	if err != nil {
-		return
-	}
 	var bs []byte
-	var l int
-	bs, l, err = codonGetByteSlice(bz[m:], int(length))
-	n = m + l
+	n, err = codonGetByteSlice(&bs, bz)
 	if err != nil {
 		return
 	}
 	var k int
 	isNeg := codonDecodeBool(bz[n:], &k, &err)
 	n = n + 1
-	if err != nil {
-		return
-	}
 	x := big.NewInt(0)
 	z := big.NewInt(0)
 	x.SetBytes(bs)
@@ -356,21 +359,21 @@ func DeepCopyInt(i sdk.Int) sdk.Int {
 	return i.AddRaw(0)
 }
 
-func EncodeDec(w *[]byte, v sdk.Dec) {
-	codonEncodeByteSlice(w, v.Int.Bytes())
-	codonEncodeBool(w, v.Int.Sign() < 0)
+func EncodeDec(v sdk.Dec) []byte {
+	bz := v.Int.Bytes()
+	res := ByteSliceWithLengthPrefix(bz)
+
+	b := byte(0)
+	if v.Int.Sign() < 0 {
+		b = byte(1)
+	}
+	res = append(res, b)
+	return res
 }
 
 func DecodeDec(bz []byte) (v sdk.Dec, n int, err error) {
-	var m int
-	length := codonDecodeInt64(bz, &m, &err)
-	if err != nil {
-		return
-	}
 	var bs []byte
-	var l int
-	bs, l, err = codonGetByteSlice(bz[m:], int(length))
-	n = m + l
+	n, err = codonGetByteSlice(&bs, bz)
 	if err != nil {
 		return
 	}
@@ -401,6 +404,7 @@ func RandDec(r RandSrc) sdk.Dec {
 func DeepCopyDec(d sdk.Dec) sdk.Dec {
 	return d.MulInt64(1)
 }
+
 
 
 // ========= BridgeBegin ============
@@ -667,73 +671,50 @@ func (_ *CodonStub) UvarintSize(u uint64) int {
 	return n
 }
 func (_ *CodonStub) EncodeByteSlice(w io.Writer, bz []byte) error {
-	buf := make([]byte, 0, binary.MaxVarintLen64+len(bz))
-	codonEncodeByteSlice(&buf, bz)
-	_, err := w.Write(buf)
-	return err
-}
-func (_ *CodonStub) EncodeUvarint(w io.Writer, u uint64) error {
-	buf := make([]byte, 0, binary.MaxVarintLen64)
-	codonEncodeUvarint(&buf, u)
-	_, err := w.Write(buf)
+	_, err := w.Write(ByteSliceWithLengthPrefix(bz))
 	return err
 }
 func (s *CodonStub) ByteSliceSize(bz []byte) int {
 	return s.UvarintSize(uint64(len(bz))) + len(bz)
 }
-func (_ *CodonStub) EncodeInt8(w io.Writer, i int8) error {
-	_, err := w.Write([]byte{byte(i)})
-	return err
-}
-func (_ *CodonStub) EncodeInt16(w io.Writer, i int16) error {
-	buf := make([]byte, 0, binary.MaxVarintLen64)
-	codonEncodeInt16(&buf, i)
-	_, err := w.Write(buf)
-	return err
-}
-func (_ *CodonStub) EncodeInt32(w io.Writer, i int32) error {
-	buf := make([]byte, 0, binary.MaxVarintLen64)
-	codonEncodeVarint(&buf, int64(i))
-	_, err := w.Write(buf)
-	return err
-}
-func (_ *CodonStub) EncodeInt64(w io.Writer, i int64) error {
-	buf := make([]byte, 0, binary.MaxVarintLen64)
-	codonEncodeVarint(&buf, i)
-	_, err := w.Write(buf)
-	return err
-}
 func (_ *CodonStub) EncodeVarint(w io.Writer, i int64) error {
-	buf := make([]byte, 0, binary.MaxVarintLen64)
-	codonEncodeVarint(&buf, i)
-	_, err := w.Write(buf)
+	var buf [binary.MaxVarintLen64]byte
+	n := binary.PutVarint(buf[:], i)
+	_, err := w.Write(buf[:n])
 	return err
 }
-func (_ *CodonStub) EncodeByte(w io.Writer, b byte) error {
-	_, err := w.Write([]byte{b})
+func (s *CodonStub) EncodeInt8(w io.Writer, i int8) error {
+	return s.EncodeVarint(w, int64(i))
+}
+func (s *CodonStub) EncodeInt16(w io.Writer, i int16) error {
+	return s.EncodeVarint(w, int64(i))
+}
+func (s *CodonStub) EncodeInt32(w io.Writer, i int32) error {
+	return s.EncodeVarint(w, int64(i))
+}
+func (s *CodonStub) EncodeInt64(w io.Writer, i int64) error {
+	return s.EncodeVarint(w, int64(i))
+}
+func (_ *CodonStub) EncodeUvarint(w io.Writer, u uint64) error {
+	var buf [binary.MaxVarintLen64]byte
+	n := binary.PutUvarint(buf[:], u)
+	_, err := w.Write(buf[:n])
 	return err
 }
-func (_ *CodonStub) EncodeUint8(w io.Writer, u uint8) error {
-	_, err := w.Write([]byte{u})
-	return err
+func (s *CodonStub) EncodeByte(w io.Writer, b byte) error {
+	return s.EncodeUvarint(w, uint64(b))
 }
-func (_ *CodonStub) EncodeUint16(w io.Writer, u uint16) error {
-	buf := make([]byte, 0, binary.MaxVarintLen64)
-	codonEncodeUint16(&buf, u)
-	_, err := w.Write(buf)
-	return err
+func (s *CodonStub) EncodeUint8(w io.Writer, u uint8) error {
+	return s.EncodeUvarint(w, uint64(u))
 }
-func (_ *CodonStub) EncodeUint32(w io.Writer, u uint32) error {
-	buf := make([]byte, 0, binary.MaxVarintLen64)
-	codonEncodeUvarint(&buf, uint64(u))
-	_, err := w.Write(buf)
-	return err
+func (s *CodonStub) EncodeUint16(w io.Writer, u uint16) error {
+	return s.EncodeUvarint(w, uint64(u))
 }
-func (_ *CodonStub) EncodeUint64(w io.Writer, u uint64) error {
-	buf := make([]byte, 0, binary.MaxVarintLen64)
-	codonEncodeUvarint(&buf, u)
-	_, err := w.Write(buf)
-	return err
+func (s *CodonStub) EncodeUint32(w io.Writer, u uint32) error {
+	return s.EncodeUvarint(w, uint64(u))
+}
+func (s *CodonStub) EncodeUint64(w io.Writer, u uint64) error {
+	return s.EncodeUvarint(w, uint64(u))
 }
 func (_ *CodonStub) EncodeBool(w io.Writer, b bool) error {
 	u := byte(0)
@@ -743,23 +724,8 @@ func (_ *CodonStub) EncodeBool(w io.Writer, b bool) error {
 	_, err := w.Write([]byte{u})
 	return err
 }
-func (_ *CodonStub) EncodeFloat32(w io.Writer, f float32) error {
-	buf := make([]byte, 0, binary.MaxVarintLen64)
-	codonEncodeFloat32(&buf, f)
-	_, err := w.Write(buf)
-	return err
-}
-func (_ *CodonStub) EncodeFloat64(w io.Writer, f float64) error {
-	buf := make([]byte, 0, binary.MaxVarintLen64)
-	codonEncodeFloat64(&buf, f)
-	_, err := w.Write(buf)
-	return err
-}
-func (_ *CodonStub) EncodeString(w io.Writer, s string) error {
-	buf := make([]byte, 0, binary.MaxVarintLen64+len(s))
-	codonEncodeString(&buf, s)
-	_, err := w.Write(buf)
-	return err
+func (s *CodonStub) EncodeString(w io.Writer, str string) error {
+	return s.EncodeByteSlice(w, []byte(str))
 }
 func (_ *CodonStub) DecodeInt8(bz []byte) (i int8, n int, err error) {
 	i = codonDecodeInt8(bz, &n, &err)
@@ -809,22 +775,8 @@ func (_ *CodonStub) DecodeBool(bz []byte) (b bool, n int, err error) {
 	b = codonDecodeBool(bz, &n, &err)
 	return
 }
-func (_ *CodonStub) DecodeFloat32(bz []byte) (f float32, n int, err error) {
-	f = codonDecodeFloat32(bz, &n, &err)
-	return
-}
-func (_ *CodonStub) DecodeFloat64(bz []byte) (f float64, n int, err error) {
-	f = codonDecodeFloat64(bz, &n, &err)
-	return
-}
 func (_ *CodonStub) DecodeByteSlice(bz []byte) (bz2 []byte, n int, err error) {
-	length := codonDecodeInt(bz, &n, &err)
-	if err != nil {
-		return
-	}
-	bz = bz[n:]
-	n += length
-	bz2, m, err := codonGetByteSlice(bz, length)
+	m, err := codonGetByteSlice(&bz2, bz)
 	n += m
 	return
 }
@@ -840,25 +792,28 @@ func (_ *CodonStub) VarintSize(i int64) int {
 // ========= BridgeEnd ============
 // Non-Interface
 func EncodePrivKeyEd25519(w *[]byte, v PrivKeyEd25519) {
-codonEncodeByteSlice(w, v[:])
+codonEncodeByteSlice(0, w, v[:])
 } //End of EncodePrivKeyEd25519
 
-func DecodePrivKeyEd25519(bz []byte) (PrivKeyEd25519, int, error) {
-var err error
-var length int
-var v PrivKeyEd25519
+func DecodePrivKeyEd25519(bz []byte) (v PrivKeyEd25519, total int, err error) {
 var n int
-var total int
-length = codonDecodeInt(bz, &n, &err)
+for len(bz) != 0 {
+tag := codonDecodeUint64(bz, &n, &err)
 if err != nil {return v, total, err}
 bz = bz[n:]
 total+=n
-for _0, length_0 := 0, length; _0<length_0; _0++ { //array of uint8
-v[_0] = uint8(codonDecodeUint8(bz, &n, &err))
-if err != nil {return v, total, err}
+tag = tag >> 3
+switch tag {
+case 0:
+o := v[:]
+n, err = codonGetByteSlice(&o, bz)
+if err != nil {return}
 bz = bz[n:]
 total+=n
+default: err = errors.New("Unknown Field")
+return
 }
+} // end for
 return v, total, nil
 } //End of DecodePrivKeyEd25519
 
@@ -883,25 +838,28 @@ return
 
 // Non-Interface
 func EncodePrivKeySecp256k1(w *[]byte, v PrivKeySecp256k1) {
-codonEncodeByteSlice(w, v[:])
+codonEncodeByteSlice(0, w, v[:])
 } //End of EncodePrivKeySecp256k1
 
-func DecodePrivKeySecp256k1(bz []byte) (PrivKeySecp256k1, int, error) {
-var err error
-var length int
-var v PrivKeySecp256k1
+func DecodePrivKeySecp256k1(bz []byte) (v PrivKeySecp256k1, total int, err error) {
 var n int
-var total int
-length = codonDecodeInt(bz, &n, &err)
+for len(bz) != 0 {
+tag := codonDecodeUint64(bz, &n, &err)
 if err != nil {return v, total, err}
 bz = bz[n:]
 total+=n
-for _0, length_0 := 0, length; _0<length_0; _0++ { //array of uint8
-v[_0] = uint8(codonDecodeUint8(bz, &n, &err))
-if err != nil {return v, total, err}
+tag = tag >> 3
+switch tag {
+case 0:
+o := v[:]
+n, err = codonGetByteSlice(&o, bz)
+if err != nil {return}
 bz = bz[n:]
 total+=n
+default: err = errors.New("Unknown Field")
+return
 }
+} // end for
 return v, total, nil
 } //End of DecodePrivKeySecp256k1
 
@@ -926,25 +884,28 @@ return
 
 // Non-Interface
 func EncodePubKeyEd25519(w *[]byte, v PubKeyEd25519) {
-codonEncodeByteSlice(w, v[:])
+codonEncodeByteSlice(0, w, v[:])
 } //End of EncodePubKeyEd25519
 
-func DecodePubKeyEd25519(bz []byte) (PubKeyEd25519, int, error) {
-var err error
-var length int
-var v PubKeyEd25519
+func DecodePubKeyEd25519(bz []byte) (v PubKeyEd25519, total int, err error) {
 var n int
-var total int
-length = codonDecodeInt(bz, &n, &err)
+for len(bz) != 0 {
+tag := codonDecodeUint64(bz, &n, &err)
 if err != nil {return v, total, err}
 bz = bz[n:]
 total+=n
-for _0, length_0 := 0, length; _0<length_0; _0++ { //array of uint8
-v[_0] = uint8(codonDecodeUint8(bz, &n, &err))
-if err != nil {return v, total, err}
+tag = tag >> 3
+switch tag {
+case 0:
+o := v[:]
+n, err = codonGetByteSlice(&o, bz)
+if err != nil {return}
 bz = bz[n:]
 total+=n
+default: err = errors.New("Unknown Field")
+return
 }
+} // end for
 return v, total, nil
 } //End of DecodePubKeyEd25519
 
@@ -969,25 +930,28 @@ return
 
 // Non-Interface
 func EncodePubKeySecp256k1(w *[]byte, v PubKeySecp256k1) {
-codonEncodeByteSlice(w, v[:])
+codonEncodeByteSlice(0, w, v[:])
 } //End of EncodePubKeySecp256k1
 
-func DecodePubKeySecp256k1(bz []byte) (PubKeySecp256k1, int, error) {
-var err error
-var length int
-var v PubKeySecp256k1
+func DecodePubKeySecp256k1(bz []byte) (v PubKeySecp256k1, total int, err error) {
 var n int
-var total int
-length = codonDecodeInt(bz, &n, &err)
+for len(bz) != 0 {
+tag := codonDecodeUint64(bz, &n, &err)
 if err != nil {return v, total, err}
 bz = bz[n:]
 total+=n
-for _0, length_0 := 0, length; _0<length_0; _0++ { //array of uint8
-v[_0] = uint8(codonDecodeUint8(bz, &n, &err))
-if err != nil {return v, total, err}
+tag = tag >> 3
+switch tag {
+case 0:
+o := v[:]
+n, err = codonGetByteSlice(&o, bz)
+if err != nil {return}
 bz = bz[n:]
 total+=n
+default: err = errors.New("Unknown Field")
+return
 }
+} // end for
 return v, total, nil
 } //End of DecodePubKeySecp256k1
 
@@ -1012,37 +976,41 @@ return
 
 // Non-Interface
 func EncodePubKeyMultisigThreshold(w *[]byte, v PubKeyMultisigThreshold) {
-codonEncodeUvarint(w, uint64(v.K))
-codonEncodeVarint(w, int64(len(v.PubKeys)))
+codonEncodeUvarint(0, w, uint64(v.K))
 for _0:=0; _0<len(v.PubKeys); _0++ {
-EncodePubKey(w, v.PubKeys[_0])// interface_encode
+codonEncodeByteSlice(1, w, func() []byte {
+w := make([]byte, 0, 64)
+EncodePubKey(&w, v.PubKeys[_0])// interface_encode
+return w
+}()) // end of v.PubKeys[_0]
 }
 } //End of EncodePubKeyMultisigThreshold
 
-func DecodePubKeyMultisigThreshold(bz []byte) (PubKeyMultisigThreshold, int, error) {
-var err error
-var length int
-var v PubKeyMultisigThreshold
+func DecodePubKeyMultisigThreshold(bz []byte) (v PubKeyMultisigThreshold, total int, err error) {
 var n int
-var total int
+for len(bz) != 0 {
+tag := codonDecodeUint64(bz, &n, &err)
+if err != nil {return v, total, err}
+bz = bz[n:]
+total+=n
+tag = tag >> 3
+switch tag {
+case 0: // v.K
 v.K = uint(codonDecodeUint(bz, &n, &err))
-if err != nil {return v, total, err}
+if err != nil {return}
 bz = bz[n:]
 total+=n
-length = codonDecodeInt(bz, &n, &err)
-if err != nil {return v, total, err}
+case 1: // v.PubKeys
+var tmp PubKey
+tmp, n, err = DecodePubKey(bz)
+if err != nil {return}
 bz = bz[n:]
 total+=n
-if length==0 {v.PubKeys = nil
-} else {
-v.PubKeys = make([]PubKey, length)
+v.PubKeys = append(v.PubKeys, tmp)
+default: err = errors.New("Unknown Field")
+return
 }
-for _0, length_0 := 0, length; _0<length_0; _0++ { //slice of interface
-v.PubKeys[_0], n, err = DecodePubKey(bz)
-if err != nil {return v, total, err}
-bz = bz[n:]
-total+=n
-}
+} // end for
 return v, total, nil
 } //End of DecodePubKeyMultisigThreshold
 
@@ -1077,18 +1045,27 @@ return
 
 // Non-Interface
 func EncodeSignedMsgType(w *[]byte, v SignedMsgType) {
-codonEncodeUint8(w, uint8(v))
+codonEncodeUint8(0, w, uint8(v))
 } //End of EncodeSignedMsgType
 
-func DecodeSignedMsgType(bz []byte) (SignedMsgType, int, error) {
-var err error
-var v SignedMsgType
+func DecodeSignedMsgType(bz []byte) (v SignedMsgType, total int, err error) {
 var n int
-var total int
-v = SignedMsgType(codonDecodeUint8(bz, &n, &err))
+for len(bz) != 0 {
+tag := codonDecodeUint64(bz, &n, &err)
 if err != nil {return v, total, err}
 bz = bz[n:]
 total+=n
+tag = tag >> 3
+switch tag {
+case 0:
+v = SignedMsgType(codonDecodeUint8(bz, &n, &err))
+if err != nil {return}
+bz = bz[n:]
+total+=n
+default: err = errors.New("Unknown Field")
+return
+}
+} // end for
 return v, total, nil
 } //End of DecodeSignedMsgType
 
@@ -1105,18 +1082,27 @@ return
 
 // Non-Interface
 func EncodeVoteOption(w *[]byte, v VoteOption) {
-codonEncodeUint8(w, uint8(v))
+codonEncodeUint8(0, w, uint8(v))
 } //End of EncodeVoteOption
 
-func DecodeVoteOption(bz []byte) (VoteOption, int, error) {
-var err error
-var v VoteOption
+func DecodeVoteOption(bz []byte) (v VoteOption, total int, err error) {
 var n int
-var total int
-v = VoteOption(codonDecodeUint8(bz, &n, &err))
+for len(bz) != 0 {
+tag := codonDecodeUint64(bz, &n, &err)
 if err != nil {return v, total, err}
 bz = bz[n:]
 total+=n
+tag = tag >> 3
+switch tag {
+case 0:
+v = VoteOption(codonDecodeUint8(bz, &n, &err))
+if err != nil {return}
+bz = bz[n:]
+total+=n
+default: err = errors.New("Unknown Field")
+return
+}
+} // end for
 return v, total, nil
 } //End of DecodeVoteOption
 
@@ -1133,84 +1119,141 @@ return
 
 // Non-Interface
 func EncodeVote(w *[]byte, v Vote) {
-codonEncodeUint8(w, uint8(v.Type))
-codonEncodeVarint(w, int64(v.Height))
-codonEncodeVarint(w, int64(v.Round))
-codonEncodeByteSlice(w, v.BlockID.Hash[:])
-codonEncodeVarint(w, int64(v.BlockID.PartsHeader.Total))
-codonEncodeByteSlice(w, v.BlockID.PartsHeader.Hash[:])
-// end of v.BlockID.PartsHeader
-// end of v.BlockID
-EncodeTime(w, v.Timestamp)
-codonEncodeByteSlice(w, v.ValidatorAddress[:])
-codonEncodeVarint(w, int64(v.ValidatorIndex))
-codonEncodeByteSlice(w, v.Signature[:])
+codonEncodeUint8(0, w, uint8(v.Type))
+codonEncodeVarint(1, w, int64(v.Height))
+codonEncodeVarint(2, w, int64(v.Round))
+codonEncodeByteSlice(3, w, func() []byte {
+wBuf := make([]byte, 0, 64)
+w := &wBuf
+codonEncodeByteSlice(0, w, v.BlockID.Hash[:])
+codonEncodeByteSlice(1, w, func() []byte {
+wBuf := make([]byte, 0, 64)
+w := &wBuf
+codonEncodeVarint(0, w, int64(v.BlockID.PartsHeader.Total))
+codonEncodeByteSlice(1, w, v.BlockID.PartsHeader.Hash[:])
+return wBuf
+}()) // end of v.BlockID.PartsHeader
+return wBuf
+}()) // end of v.BlockID
+codonEncodeByteSlice(4, w, EncodeTime(v.Timestamp))
+codonEncodeByteSlice(5, w, v.ValidatorAddress[:])
+codonEncodeVarint(6, w, int64(v.ValidatorIndex))
+codonEncodeByteSlice(7, w, v.Signature[:])
 } //End of EncodeVote
 
-func DecodeVote(bz []byte) (Vote, int, error) {
-var err error
-var length int
-var v Vote
+func DecodeVote(bz []byte) (v Vote, total int, err error) {
 var n int
-var total int
+for len(bz) != 0 {
+tag := codonDecodeUint64(bz, &n, &err)
+if err != nil {return v, total, err}
+bz = bz[n:]
+total+=n
+tag = tag >> 3
+switch tag {
+case 0: // v.Type
 v.Type = SignedMsgType(codonDecodeUint8(bz, &n, &err))
-if err != nil {return v, total, err}
+if err != nil {return}
 bz = bz[n:]
 total+=n
+case 1: // v.Height
 v.Height = int64(codonDecodeInt64(bz, &n, &err))
-if err != nil {return v, total, err}
+if err != nil {return}
 bz = bz[n:]
 total+=n
+case 2: // v.Round
 v.Round = int(codonDecodeInt(bz, &n, &err))
-if err != nil {return v, total, err}
+if err != nil {return}
 bz = bz[n:]
 total+=n
-length = codonDecodeInt(bz, &n, &err)
-if err != nil {return v, total, err}
+case 3: // v.BlockID
+l := codonDecodeUint64(bz, &n, &err)
+if err != nil {return}
 bz = bz[n:]
 total+=n
-v.BlockID.Hash, n, err = codonGetByteSlice(bz, length)
-if err != nil {return v, total, err}
+func(bz []byte) {
+for len(bz) != 0 {
+tag := codonDecodeUint64(bz, &n, &err)
+if err != nil {return}
 bz = bz[n:]
 total+=n
+tag = tag >> 3
+switch tag {
+case 0: // v.BlockID.Hash
+var tmpBz []byte
+n, err = codonGetByteSlice(&tmpBz, bz)
+if err != nil {return}
+bz = bz[n:]
+total+=n
+v.BlockID.Hash = tmpBz
+case 1: // v.BlockID.PartsHeader
+l := codonDecodeUint64(bz, &n, &err)
+if err != nil {return}
+bz = bz[n:]
+total+=n
+func(bz []byte) {
+for len(bz) != 0 {
+tag := codonDecodeUint64(bz, &n, &err)
+if err != nil {return}
+bz = bz[n:]
+total+=n
+tag = tag >> 3
+switch tag {
+case 0: // v.BlockID.PartsHeader.Total
 v.BlockID.PartsHeader.Total = int(codonDecodeInt(bz, &n, &err))
-if err != nil {return v, total, err}
+if err != nil {return}
 bz = bz[n:]
 total+=n
-length = codonDecodeInt(bz, &n, &err)
-if err != nil {return v, total, err}
+case 1: // v.BlockID.PartsHeader.Hash
+var tmpBz []byte
+n, err = codonGetByteSlice(&tmpBz, bz)
+if err != nil {return}
 bz = bz[n:]
 total+=n
-v.BlockID.PartsHeader.Hash, n, err = codonGetByteSlice(bz, length)
-if err != nil {return v, total, err}
-bz = bz[n:]
-total+=n
-// end of v.BlockID.PartsHeader
-// end of v.BlockID
+v.BlockID.PartsHeader.Hash = tmpBz
+default: err = errors.New("Unknown Field")
+return
+}
+} // end for
+}(bz[:l]) // end func
+if err != nil {return}
+bz = bz[l:]
+n += int(l)
+default: err = errors.New("Unknown Field")
+return
+}
+} // end for
+}(bz[:l]) // end func
+if err != nil {return}
+bz = bz[l:]
+n += int(l)
+case 4: // v.Timestamp
 v.Timestamp, n, err = DecodeTime(bz)
-if err != nil {return v, total, err}
+if err != nil {return}
 bz = bz[n:]
 total+=n
-length = codonDecodeInt(bz, &n, &err)
-if err != nil {return v, total, err}
+case 5: // v.ValidatorAddress
+var tmpBz []byte
+n, err = codonGetByteSlice(&tmpBz, bz)
+if err != nil {return}
 bz = bz[n:]
 total+=n
-v.ValidatorAddress, n, err = codonGetByteSlice(bz, length)
-if err != nil {return v, total, err}
-bz = bz[n:]
-total+=n
+v.ValidatorAddress = tmpBz
+case 6: // v.ValidatorIndex
 v.ValidatorIndex = int(codonDecodeInt(bz, &n, &err))
-if err != nil {return v, total, err}
+if err != nil {return}
 bz = bz[n:]
 total+=n
-length = codonDecodeInt(bz, &n, &err)
-if err != nil {return v, total, err}
+case 7: // v.Signature
+var tmpBz []byte
+n, err = codonGetByteSlice(&tmpBz, bz)
+if err != nil {return}
 bz = bz[n:]
 total+=n
-v.Signature, n, err = codonGetByteSlice(bz, length)
-if err != nil {return v, total, err}
-bz = bz[n:]
-total+=n
+v.Signature = tmpBz
+default: err = errors.New("Unknown Field")
+return
+}
+} // end for
 return v, total, nil
 } //End of DecodeVote
 
@@ -1275,18 +1318,27 @@ return
 
 // Non-Interface
 func EncodeSdkInt(w *[]byte, v SdkInt) {
-EncodeInt(w, v)
+codonEncodeByteSlice(0, w, EncodeInt(v))
 } //End of EncodeSdkInt
 
-func DecodeSdkInt(bz []byte) (SdkInt, int, error) {
-var err error
-var v SdkInt
+func DecodeSdkInt(bz []byte) (v SdkInt, total int, err error) {
 var n int
-var total int
-v, n, err = DecodeInt(bz)
+for len(bz) != 0 {
+tag := codonDecodeUint64(bz, &n, &err)
 if err != nil {return v, total, err}
 bz = bz[n:]
 total+=n
+tag = tag >> 3
+switch tag {
+case 0:
+v, n, err = DecodeInt(bz)
+if err != nil {return}
+bz = bz[n:]
+total+=n
+default: err = errors.New("Unknown Field")
+return
+}
+} // end for
 return v, total, nil
 } //End of DecodeSdkInt
 
@@ -1303,18 +1355,27 @@ return
 
 // Non-Interface
 func EncodeSdkDec(w *[]byte, v SdkDec) {
-EncodeDec(w, v)
+codonEncodeByteSlice(0, w, EncodeDec(v))
 } //End of EncodeSdkDec
 
-func DecodeSdkDec(bz []byte) (SdkDec, int, error) {
-var err error
-var v SdkDec
+func DecodeSdkDec(bz []byte) (v SdkDec, total int, err error) {
 var n int
-var total int
-v, n, err = DecodeDec(bz)
+for len(bz) != 0 {
+tag := codonDecodeUint64(bz, &n, &err)
 if err != nil {return v, total, err}
 bz = bz[n:]
 total+=n
+tag = tag >> 3
+switch tag {
+case 0:
+v, n, err = DecodeDec(bz)
+if err != nil {return}
+bz = bz[n:]
+total+=n
+default: err = errors.New("Unknown Field")
+return
+}
+} // end for
 return v, total, nil
 } //End of DecodeSdkDec
 
@@ -1331,18 +1392,27 @@ return
 
 // Non-Interface
 func Encodeuint64(w *[]byte, v uint64) {
-codonEncodeUvarint(w, uint64(v))
+codonEncodeUvarint(0, w, uint64(v))
 } //End of Encodeuint64
 
-func Decodeuint64(bz []byte) (uint64, int, error) {
-var err error
-var v uint64
+func Decodeuint64(bz []byte) (v uint64, total int, err error) {
 var n int
-var total int
-v = uint64(codonDecodeUint64(bz, &n, &err))
+for len(bz) != 0 {
+tag := codonDecodeUint64(bz, &n, &err)
 if err != nil {return v, total, err}
 bz = bz[n:]
 total+=n
+tag = tag >> 3
+switch tag {
+case 0:
+v = uint64(codonDecodeUint64(bz, &n, &err))
+if err != nil {return}
+bz = bz[n:]
+total+=n
+default: err = errors.New("Unknown Field")
+return
+}
+} // end for
 return v, total, nil
 } //End of Decodeuint64
 
@@ -1359,18 +1429,27 @@ return
 
 // Non-Interface
 func Encodeint64(w *[]byte, v int64) {
-codonEncodeVarint(w, int64(v))
+codonEncodeVarint(0, w, int64(v))
 } //End of Encodeint64
 
-func Decodeint64(bz []byte) (int64, int, error) {
-var err error
-var v int64
+func Decodeint64(bz []byte) (v int64, total int, err error) {
 var n int
-var total int
-v = int64(codonDecodeInt64(bz, &n, &err))
+for len(bz) != 0 {
+tag := codonDecodeUint64(bz, &n, &err)
 if err != nil {return v, total, err}
 bz = bz[n:]
 total+=n
+tag = tag >> 3
+switch tag {
+case 0:
+v = int64(codonDecodeInt64(bz, &n, &err))
+if err != nil {return}
+bz = bz[n:]
+total+=n
+default: err = errors.New("Unknown Field")
+return
+}
+} // end for
 return v, total, nil
 } //End of Decodeint64
 
@@ -1387,23 +1466,29 @@ return
 
 // Non-Interface
 func EncodeConsAddress(w *[]byte, v ConsAddress) {
-codonEncodeByteSlice(w, v[:])
+codonEncodeByteSlice(0, w, v[:])
 } //End of EncodeConsAddress
 
-func DecodeConsAddress(bz []byte) (ConsAddress, int, error) {
-var err error
-var length int
-var v ConsAddress
+func DecodeConsAddress(bz []byte) (v ConsAddress, total int, err error) {
 var n int
-var total int
-length = codonDecodeInt(bz, &n, &err)
+for len(bz) != 0 {
+tag := codonDecodeUint64(bz, &n, &err)
 if err != nil {return v, total, err}
 bz = bz[n:]
 total+=n
-v, n, err = codonGetByteSlice(bz, length)
-if err != nil {return v, total, err}
+tag = tag >> 3
+switch tag {
+case 0:
+var tmpBz []byte
+n, err = codonGetByteSlice(&tmpBz, bz)
+if err != nil {return}
 bz = bz[n:]
 total+=n
+v = tmpBz
+default: err = errors.New("Unknown Field")
+return
+}
+} // end for
 return v, total, nil
 } //End of DecodeConsAddress
 
@@ -1428,23 +1513,33 @@ return
 
 // Non-Interface
 func EncodeCoin(w *[]byte, v Coin) {
-codonEncodeString(w, v.Denom)
-EncodeInt(w, v.Amount)
+codonEncodeString(0, w, v.Denom)
+codonEncodeByteSlice(1, w, EncodeInt(v.Amount))
 } //End of EncodeCoin
 
-func DecodeCoin(bz []byte) (Coin, int, error) {
-var err error
-var v Coin
+func DecodeCoin(bz []byte) (v Coin, total int, err error) {
 var n int
-var total int
+for len(bz) != 0 {
+tag := codonDecodeUint64(bz, &n, &err)
+if err != nil {return v, total, err}
+bz = bz[n:]
+total+=n
+tag = tag >> 3
+switch tag {
+case 0: // v.Denom
 v.Denom = string(codonDecodeString(bz, &n, &err))
-if err != nil {return v, total, err}
+if err != nil {return}
 bz = bz[n:]
 total+=n
+case 1: // v.Amount
 v.Amount, n, err = DecodeInt(bz)
-if err != nil {return v, total, err}
+if err != nil {return}
 bz = bz[n:]
 total+=n
+default: err = errors.New("Unknown Field")
+return
+}
+} // end for
 return v, total, nil
 } //End of DecodeCoin
 
@@ -1463,23 +1558,33 @@ return
 
 // Non-Interface
 func EncodeDecCoin(w *[]byte, v DecCoin) {
-codonEncodeString(w, v.Denom)
-EncodeDec(w, v.Amount)
+codonEncodeString(0, w, v.Denom)
+codonEncodeByteSlice(1, w, EncodeDec(v.Amount))
 } //End of EncodeDecCoin
 
-func DecodeDecCoin(bz []byte) (DecCoin, int, error) {
-var err error
-var v DecCoin
+func DecodeDecCoin(bz []byte) (v DecCoin, total int, err error) {
 var n int
-var total int
+for len(bz) != 0 {
+tag := codonDecodeUint64(bz, &n, &err)
+if err != nil {return v, total, err}
+bz = bz[n:]
+total+=n
+tag = tag >> 3
+switch tag {
+case 0: // v.Denom
 v.Denom = string(codonDecodeString(bz, &n, &err))
-if err != nil {return v, total, err}
+if err != nil {return}
 bz = bz[n:]
 total+=n
+case 1: // v.Amount
 v.Amount, n, err = DecodeDec(bz)
-if err != nil {return v, total, err}
+if err != nil {return}
 bz = bz[n:]
 total+=n
+default: err = errors.New("Unknown Field")
+return
+}
+} // end for
 return v, total, nil
 } //End of DecodeDecCoin
 
@@ -1498,28 +1603,39 @@ return
 
 // Non-Interface
 func EncodeStdSignature(w *[]byte, v StdSignature) {
-EncodePubKey(w, v.PubKey)// interface_encode
-codonEncodeByteSlice(w, v.Signature[:])
+codonEncodeByteSlice(0, w, func() []byte {
+w := make([]byte, 0, 64)
+EncodePubKey(&w, v.PubKey)// interface_encode
+return w
+}()) // end of v.PubKey
+codonEncodeByteSlice(1, w, v.Signature[:])
 } //End of EncodeStdSignature
 
-func DecodeStdSignature(bz []byte) (StdSignature, int, error) {
-var err error
-var length int
-var v StdSignature
+func DecodeStdSignature(bz []byte) (v StdSignature, total int, err error) {
 var n int
-var total int
-v.PubKey, n, err = DecodePubKey(bz)
+for len(bz) != 0 {
+tag := codonDecodeUint64(bz, &n, &err)
 if err != nil {return v, total, err}
+bz = bz[n:]
+total+=n
+tag = tag >> 3
+switch tag {
+case 0: // v.PubKey
+v.PubKey, n, err = DecodePubKey(bz)
+if err != nil {return}
 bz = bz[n:]
 total+=n // interface_decode
-length = codonDecodeInt(bz, &n, &err)
-if err != nil {return v, total, err}
+case 1: // v.Signature
+var tmpBz []byte
+n, err = codonGetByteSlice(&tmpBz, bz)
+if err != nil {return}
 bz = bz[n:]
 total+=n
-v.Signature, n, err = codonGetByteSlice(bz, length)
-if err != nil {return v, total, err}
-bz = bz[n:]
-total+=n
+v.Signature = tmpBz
+default: err = errors.New("Unknown Field")
+return
+}
+} // end for
 return v, total, nil
 } //End of DecodeStdSignature
 
@@ -1546,33 +1662,45 @@ return
 
 // Non-Interface
 func EncodeParamChange(w *[]byte, v ParamChange) {
-codonEncodeString(w, v.Subspace)
-codonEncodeString(w, v.Key)
-codonEncodeString(w, v.Subkey)
-codonEncodeString(w, v.Value)
+codonEncodeString(0, w, v.Subspace)
+codonEncodeString(1, w, v.Key)
+codonEncodeString(2, w, v.Subkey)
+codonEncodeString(3, w, v.Value)
 } //End of EncodeParamChange
 
-func DecodeParamChange(bz []byte) (ParamChange, int, error) {
-var err error
-var v ParamChange
+func DecodeParamChange(bz []byte) (v ParamChange, total int, err error) {
 var n int
-var total int
+for len(bz) != 0 {
+tag := codonDecodeUint64(bz, &n, &err)
+if err != nil {return v, total, err}
+bz = bz[n:]
+total+=n
+tag = tag >> 3
+switch tag {
+case 0: // v.Subspace
 v.Subspace = string(codonDecodeString(bz, &n, &err))
-if err != nil {return v, total, err}
+if err != nil {return}
 bz = bz[n:]
 total+=n
+case 1: // v.Key
 v.Key = string(codonDecodeString(bz, &n, &err))
-if err != nil {return v, total, err}
+if err != nil {return}
 bz = bz[n:]
 total+=n
+case 2: // v.Subkey
 v.Subkey = string(codonDecodeString(bz, &n, &err))
-if err != nil {return v, total, err}
+if err != nil {return}
 bz = bz[n:]
 total+=n
+case 3: // v.Value
 v.Value = string(codonDecodeString(bz, &n, &err))
-if err != nil {return v, total, err}
+if err != nil {return}
 bz = bz[n:]
 total+=n
+default: err = errors.New("Unknown Field")
+return
+}
+} // end for
 return v, total, nil
 } //End of DecodeParamChange
 
@@ -1595,43 +1723,45 @@ return
 
 // Non-Interface
 func EncodeInput(w *[]byte, v Input) {
-codonEncodeByteSlice(w, v.Address[:])
-codonEncodeVarint(w, int64(len(v.Coins)))
+codonEncodeByteSlice(0, w, v.Address[:])
 for _0:=0; _0<len(v.Coins); _0++ {
-codonEncodeString(w, v.Coins[_0].Denom)
-EncodeInt(w, v.Coins[_0].Amount)
-// end of v.Coins[_0]
+codonEncodeByteSlice(1, w, func() []byte {
+wBuf := make([]byte, 0, 64)
+w := &wBuf
+codonEncodeString(0, w, v.Coins[_0].Denom)
+codonEncodeByteSlice(1, w, EncodeInt(v.Coins[_0].Amount))
+return wBuf
+}()) // end of v.Coins[_0]
 }
 } //End of EncodeInput
 
-func DecodeInput(bz []byte) (Input, int, error) {
-var err error
-var length int
-var v Input
+func DecodeInput(bz []byte) (v Input, total int, err error) {
 var n int
-var total int
-length = codonDecodeInt(bz, &n, &err)
+for len(bz) != 0 {
+tag := codonDecodeUint64(bz, &n, &err)
 if err != nil {return v, total, err}
 bz = bz[n:]
 total+=n
-v.Address, n, err = codonGetByteSlice(bz, length)
-if err != nil {return v, total, err}
+tag = tag >> 3
+switch tag {
+case 0: // v.Address
+var tmpBz []byte
+n, err = codonGetByteSlice(&tmpBz, bz)
+if err != nil {return}
 bz = bz[n:]
 total+=n
-length = codonDecodeInt(bz, &n, &err)
-if err != nil {return v, total, err}
+v.Address = tmpBz
+case 1: // v.Coins
+var tmp Coin
+tmp, n, err = DecodeCoin(bz)
+if err != nil {return}
 bz = bz[n:]
 total+=n
-if length==0 {v.Coins = nil
-} else {
-v.Coins = make([]Coin, length)
+v.Coins = append(v.Coins, tmp)
+default: err = errors.New("Unknown Field")
+return
 }
-for _0, length_0 := 0, length; _0<length_0; _0++ { //slice of struct
-v.Coins[_0], n, err = DecodeCoin(bz)
-if err != nil {return v, total, err}
-bz = bz[n:]
-total+=n
-}
+} // end for
 return v, total, nil
 } //End of DecodeInput
 
@@ -1672,43 +1802,45 @@ return
 
 // Non-Interface
 func EncodeOutput(w *[]byte, v Output) {
-codonEncodeByteSlice(w, v.Address[:])
-codonEncodeVarint(w, int64(len(v.Coins)))
+codonEncodeByteSlice(0, w, v.Address[:])
 for _0:=0; _0<len(v.Coins); _0++ {
-codonEncodeString(w, v.Coins[_0].Denom)
-EncodeInt(w, v.Coins[_0].Amount)
-// end of v.Coins[_0]
+codonEncodeByteSlice(1, w, func() []byte {
+wBuf := make([]byte, 0, 64)
+w := &wBuf
+codonEncodeString(0, w, v.Coins[_0].Denom)
+codonEncodeByteSlice(1, w, EncodeInt(v.Coins[_0].Amount))
+return wBuf
+}()) // end of v.Coins[_0]
 }
 } //End of EncodeOutput
 
-func DecodeOutput(bz []byte) (Output, int, error) {
-var err error
-var length int
-var v Output
+func DecodeOutput(bz []byte) (v Output, total int, err error) {
 var n int
-var total int
-length = codonDecodeInt(bz, &n, &err)
+for len(bz) != 0 {
+tag := codonDecodeUint64(bz, &n, &err)
 if err != nil {return v, total, err}
 bz = bz[n:]
 total+=n
-v.Address, n, err = codonGetByteSlice(bz, length)
-if err != nil {return v, total, err}
+tag = tag >> 3
+switch tag {
+case 0: // v.Address
+var tmpBz []byte
+n, err = codonGetByteSlice(&tmpBz, bz)
+if err != nil {return}
 bz = bz[n:]
 total+=n
-length = codonDecodeInt(bz, &n, &err)
-if err != nil {return v, total, err}
+v.Address = tmpBz
+case 1: // v.Coins
+var tmp Coin
+tmp, n, err = DecodeCoin(bz)
+if err != nil {return}
 bz = bz[n:]
 total+=n
-if length==0 {v.Coins = nil
-} else {
-v.Coins = make([]Coin, length)
+v.Coins = append(v.Coins, tmp)
+default: err = errors.New("Unknown Field")
+return
 }
-for _0, length_0 := 0, length; _0<length_0; _0++ { //slice of struct
-v.Coins[_0], n, err = DecodeCoin(bz)
-if err != nil {return v, total, err}
-bz = bz[n:]
-total+=n
-}
+} // end for
 return v, total, nil
 } //End of DecodeOutput
 
@@ -1749,23 +1881,29 @@ return
 
 // Non-Interface
 func EncodeAccAddress(w *[]byte, v AccAddress) {
-codonEncodeByteSlice(w, v[:])
+codonEncodeByteSlice(0, w, v[:])
 } //End of EncodeAccAddress
 
-func DecodeAccAddress(bz []byte) (AccAddress, int, error) {
-var err error
-var length int
-var v AccAddress
+func DecodeAccAddress(bz []byte) (v AccAddress, total int, err error) {
 var n int
-var total int
-length = codonDecodeInt(bz, &n, &err)
+for len(bz) != 0 {
+tag := codonDecodeUint64(bz, &n, &err)
 if err != nil {return v, total, err}
 bz = bz[n:]
 total+=n
-v, n, err = codonGetByteSlice(bz, length)
-if err != nil {return v, total, err}
+tag = tag >> 3
+switch tag {
+case 0:
+var tmpBz []byte
+n, err = codonGetByteSlice(&tmpBz, bz)
+if err != nil {return}
 bz = bz[n:]
 total+=n
+v = tmpBz
+default: err = errors.New("Unknown Field")
+return
+}
+} // end for
 return v, total, nil
 } //End of DecodeAccAddress
 
@@ -1790,58 +1928,67 @@ return
 
 // Non-Interface
 func EncodeBaseAccount(w *[]byte, v BaseAccount) {
-codonEncodeByteSlice(w, v.Address[:])
-codonEncodeVarint(w, int64(len(v.Coins)))
+codonEncodeByteSlice(0, w, v.Address[:])
 for _0:=0; _0<len(v.Coins); _0++ {
-codonEncodeString(w, v.Coins[_0].Denom)
-EncodeInt(w, v.Coins[_0].Amount)
-// end of v.Coins[_0]
+codonEncodeByteSlice(1, w, func() []byte {
+wBuf := make([]byte, 0, 64)
+w := &wBuf
+codonEncodeString(0, w, v.Coins[_0].Denom)
+codonEncodeByteSlice(1, w, EncodeInt(v.Coins[_0].Amount))
+return wBuf
+}()) // end of v.Coins[_0]
 }
-EncodePubKey(w, v.PubKey)// interface_encode
-codonEncodeUvarint(w, uint64(v.AccountNumber))
-codonEncodeUvarint(w, uint64(v.Sequence))
+codonEncodeByteSlice(2, w, func() []byte {
+w := make([]byte, 0, 64)
+EncodePubKey(&w, v.PubKey)// interface_encode
+return w
+}()) // end of v.PubKey
+codonEncodeUvarint(3, w, uint64(v.AccountNumber))
+codonEncodeUvarint(4, w, uint64(v.Sequence))
 } //End of EncodeBaseAccount
 
-func DecodeBaseAccount(bz []byte) (BaseAccount, int, error) {
-var err error
-var length int
-var v BaseAccount
+func DecodeBaseAccount(bz []byte) (v BaseAccount, total int, err error) {
 var n int
-var total int
-length = codonDecodeInt(bz, &n, &err)
+for len(bz) != 0 {
+tag := codonDecodeUint64(bz, &n, &err)
 if err != nil {return v, total, err}
 bz = bz[n:]
 total+=n
-v.Address, n, err = codonGetByteSlice(bz, length)
-if err != nil {return v, total, err}
+tag = tag >> 3
+switch tag {
+case 0: // v.Address
+var tmpBz []byte
+n, err = codonGetByteSlice(&tmpBz, bz)
+if err != nil {return}
 bz = bz[n:]
 total+=n
-length = codonDecodeInt(bz, &n, &err)
-if err != nil {return v, total, err}
+v.Address = tmpBz
+case 1: // v.Coins
+var tmp Coin
+tmp, n, err = DecodeCoin(bz)
+if err != nil {return}
 bz = bz[n:]
 total+=n
-if length==0 {v.Coins = nil
-} else {
-v.Coins = make([]Coin, length)
-}
-for _0, length_0 := 0, length; _0<length_0; _0++ { //slice of struct
-v.Coins[_0], n, err = DecodeCoin(bz)
-if err != nil {return v, total, err}
-bz = bz[n:]
-total+=n
-}
+v.Coins = append(v.Coins, tmp)
+case 2: // v.PubKey
 v.PubKey, n, err = DecodePubKey(bz)
-if err != nil {return v, total, err}
+if err != nil {return}
 bz = bz[n:]
 total+=n // interface_decode
+case 3: // v.AccountNumber
 v.AccountNumber = uint64(codonDecodeUint64(bz, &n, &err))
-if err != nil {return v, total, err}
+if err != nil {return}
 bz = bz[n:]
 total+=n
+case 4: // v.Sequence
 v.Sequence = uint64(codonDecodeUint64(bz, &n, &err))
-if err != nil {return v, total, err}
+if err != nil {return}
 bz = bz[n:]
 total+=n
+default: err = errors.New("Unknown Field")
+return
+}
+} // end for
 return v, total, nil
 } //End of DecodeBaseAccount
 
@@ -1888,126 +2035,148 @@ return
 
 // Non-Interface
 func EncodeBaseVestingAccount(w *[]byte, v BaseVestingAccount) {
-codonEncodeByteSlice(w, v.BaseAccount.Address[:])
-codonEncodeVarint(w, int64(len(v.BaseAccount.Coins)))
+codonEncodeByteSlice(0, w, func() []byte {
+wBuf := make([]byte, 0, 64)
+w := &wBuf
+codonEncodeByteSlice(0, w, v.BaseAccount.Address[:])
 for _0:=0; _0<len(v.BaseAccount.Coins); _0++ {
-codonEncodeString(w, v.BaseAccount.Coins[_0].Denom)
-EncodeInt(w, v.BaseAccount.Coins[_0].Amount)
-// end of v.BaseAccount.Coins[_0]
+codonEncodeByteSlice(1, w, func() []byte {
+wBuf := make([]byte, 0, 64)
+w := &wBuf
+codonEncodeString(0, w, v.BaseAccount.Coins[_0].Denom)
+codonEncodeByteSlice(1, w, EncodeInt(v.BaseAccount.Coins[_0].Amount))
+return wBuf
+}()) // end of v.BaseAccount.Coins[_0]
 }
-EncodePubKey(w, v.BaseAccount.PubKey)// interface_encode
-codonEncodeUvarint(w, uint64(v.BaseAccount.AccountNumber))
-codonEncodeUvarint(w, uint64(v.BaseAccount.Sequence))
-// end of v.BaseAccount
-codonEncodeVarint(w, int64(len(v.OriginalVesting)))
+codonEncodeByteSlice(2, w, func() []byte {
+w := make([]byte, 0, 64)
+EncodePubKey(&w, v.BaseAccount.PubKey)// interface_encode
+return w
+}()) // end of v.BaseAccount.PubKey
+codonEncodeUvarint(3, w, uint64(v.BaseAccount.AccountNumber))
+codonEncodeUvarint(4, w, uint64(v.BaseAccount.Sequence))
+return wBuf
+}()) // end of v.BaseAccount
 for _0:=0; _0<len(v.OriginalVesting); _0++ {
-codonEncodeString(w, v.OriginalVesting[_0].Denom)
-EncodeInt(w, v.OriginalVesting[_0].Amount)
-// end of v.OriginalVesting[_0]
+codonEncodeByteSlice(1, w, func() []byte {
+wBuf := make([]byte, 0, 64)
+w := &wBuf
+codonEncodeString(0, w, v.OriginalVesting[_0].Denom)
+codonEncodeByteSlice(1, w, EncodeInt(v.OriginalVesting[_0].Amount))
+return wBuf
+}()) // end of v.OriginalVesting[_0]
 }
-codonEncodeVarint(w, int64(len(v.DelegatedFree)))
 for _0:=0; _0<len(v.DelegatedFree); _0++ {
-codonEncodeString(w, v.DelegatedFree[_0].Denom)
-EncodeInt(w, v.DelegatedFree[_0].Amount)
-// end of v.DelegatedFree[_0]
+codonEncodeByteSlice(2, w, func() []byte {
+wBuf := make([]byte, 0, 64)
+w := &wBuf
+codonEncodeString(0, w, v.DelegatedFree[_0].Denom)
+codonEncodeByteSlice(1, w, EncodeInt(v.DelegatedFree[_0].Amount))
+return wBuf
+}()) // end of v.DelegatedFree[_0]
 }
-codonEncodeVarint(w, int64(len(v.DelegatedVesting)))
 for _0:=0; _0<len(v.DelegatedVesting); _0++ {
-codonEncodeString(w, v.DelegatedVesting[_0].Denom)
-EncodeInt(w, v.DelegatedVesting[_0].Amount)
-// end of v.DelegatedVesting[_0]
+codonEncodeByteSlice(3, w, func() []byte {
+wBuf := make([]byte, 0, 64)
+w := &wBuf
+codonEncodeString(0, w, v.DelegatedVesting[_0].Denom)
+codonEncodeByteSlice(1, w, EncodeInt(v.DelegatedVesting[_0].Amount))
+return wBuf
+}()) // end of v.DelegatedVesting[_0]
 }
-codonEncodeVarint(w, int64(v.EndTime))
+codonEncodeVarint(4, w, int64(v.EndTime))
 } //End of EncodeBaseVestingAccount
 
-func DecodeBaseVestingAccount(bz []byte) (BaseVestingAccount, int, error) {
-var err error
-var length int
-var v BaseVestingAccount
+func DecodeBaseVestingAccount(bz []byte) (v BaseVestingAccount, total int, err error) {
 var n int
-var total int
+for len(bz) != 0 {
+tag := codonDecodeUint64(bz, &n, &err)
+if err != nil {return v, total, err}
+bz = bz[n:]
+total+=n
+tag = tag >> 3
+switch tag {
+case 0: // v.BaseAccount
 v.BaseAccount = &BaseAccount{}
-length = codonDecodeInt(bz, &n, &err)
-if err != nil {return v, total, err}
+l := codonDecodeUint64(bz, &n, &err)
+if err != nil {return}
 bz = bz[n:]
 total+=n
-v.BaseAccount.Address, n, err = codonGetByteSlice(bz, length)
-if err != nil {return v, total, err}
+func(bz []byte) {
+for len(bz) != 0 {
+tag := codonDecodeUint64(bz, &n, &err)
+if err != nil {return}
 bz = bz[n:]
 total+=n
-length = codonDecodeInt(bz, &n, &err)
-if err != nil {return v, total, err}
+tag = tag >> 3
+switch tag {
+case 0: // v.BaseAccount.Address
+var tmpBz []byte
+n, err = codonGetByteSlice(&tmpBz, bz)
+if err != nil {return}
 bz = bz[n:]
 total+=n
-if length==0 {v.BaseAccount.Coins = nil
-} else {
-v.BaseAccount.Coins = make([]Coin, length)
-}
-for _0, length_0 := 0, length; _0<length_0; _0++ { //slice of struct
-v.BaseAccount.Coins[_0], n, err = DecodeCoin(bz)
-if err != nil {return v, total, err}
+v.BaseAccount.Address = tmpBz
+case 1: // v.BaseAccount.Coins
+var tmp Coin
+tmp, n, err = DecodeCoin(bz)
+if err != nil {return}
 bz = bz[n:]
 total+=n
-}
+v.BaseAccount.Coins = append(v.BaseAccount.Coins, tmp)
+case 2: // v.BaseAccount.PubKey
 v.BaseAccount.PubKey, n, err = DecodePubKey(bz)
-if err != nil {return v, total, err}
+if err != nil {return}
 bz = bz[n:]
 total+=n // interface_decode
+case 3: // v.BaseAccount.AccountNumber
 v.BaseAccount.AccountNumber = uint64(codonDecodeUint64(bz, &n, &err))
-if err != nil {return v, total, err}
+if err != nil {return}
 bz = bz[n:]
 total+=n
+case 4: // v.BaseAccount.Sequence
 v.BaseAccount.Sequence = uint64(codonDecodeUint64(bz, &n, &err))
-if err != nil {return v, total, err}
+if err != nil {return}
 bz = bz[n:]
 total+=n
-// end of v.BaseAccount
-length = codonDecodeInt(bz, &n, &err)
-if err != nil {return v, total, err}
-bz = bz[n:]
-total+=n
-if length==0 {v.OriginalVesting = nil
-} else {
-v.OriginalVesting = make([]Coin, length)
+default: err = errors.New("Unknown Field")
+return
 }
-for _0, length_0 := 0, length; _0<length_0; _0++ { //slice of struct
-v.OriginalVesting[_0], n, err = DecodeCoin(bz)
-if err != nil {return v, total, err}
+} // end for
+}(bz[:l]) // end func
+if err != nil {return}
+bz = bz[l:]
+n += int(l)
+case 1: // v.OriginalVesting
+var tmp Coin
+tmp, n, err = DecodeCoin(bz)
+if err != nil {return}
 bz = bz[n:]
 total+=n
-}
-length = codonDecodeInt(bz, &n, &err)
-if err != nil {return v, total, err}
+v.OriginalVesting = append(v.OriginalVesting, tmp)
+case 2: // v.DelegatedFree
+var tmp Coin
+tmp, n, err = DecodeCoin(bz)
+if err != nil {return}
 bz = bz[n:]
 total+=n
-if length==0 {v.DelegatedFree = nil
-} else {
-v.DelegatedFree = make([]Coin, length)
-}
-for _0, length_0 := 0, length; _0<length_0; _0++ { //slice of struct
-v.DelegatedFree[_0], n, err = DecodeCoin(bz)
-if err != nil {return v, total, err}
+v.DelegatedFree = append(v.DelegatedFree, tmp)
+case 3: // v.DelegatedVesting
+var tmp Coin
+tmp, n, err = DecodeCoin(bz)
+if err != nil {return}
 bz = bz[n:]
 total+=n
-}
-length = codonDecodeInt(bz, &n, &err)
-if err != nil {return v, total, err}
-bz = bz[n:]
-total+=n
-if length==0 {v.DelegatedVesting = nil
-} else {
-v.DelegatedVesting = make([]Coin, length)
-}
-for _0, length_0 := 0, length; _0<length_0; _0++ { //slice of struct
-v.DelegatedVesting[_0], n, err = DecodeCoin(bz)
-if err != nil {return v, total, err}
-bz = bz[n:]
-total+=n
-}
+v.DelegatedVesting = append(v.DelegatedVesting, tmp)
+case 4: // v.EndTime
 v.EndTime = int64(codonDecodeInt64(bz, &n, &err))
-if err != nil {return v, total, err}
+if err != nil {return}
 bz = bz[n:]
 total+=n
+default: err = errors.New("Unknown Field")
+return
+}
+} // end for
 return v, total, nil
 } //End of DecodeBaseVestingAccount
 
@@ -2108,134 +2277,181 @@ return
 
 // Non-Interface
 func EncodeContinuousVestingAccount(w *[]byte, v ContinuousVestingAccount) {
-codonEncodeByteSlice(w, v.BaseVestingAccount.BaseAccount.Address[:])
-codonEncodeVarint(w, int64(len(v.BaseVestingAccount.BaseAccount.Coins)))
+codonEncodeByteSlice(0, w, func() []byte {
+wBuf := make([]byte, 0, 64)
+w := &wBuf
+codonEncodeByteSlice(0, w, func() []byte {
+wBuf := make([]byte, 0, 64)
+w := &wBuf
+codonEncodeByteSlice(0, w, v.BaseVestingAccount.BaseAccount.Address[:])
 for _0:=0; _0<len(v.BaseVestingAccount.BaseAccount.Coins); _0++ {
-codonEncodeString(w, v.BaseVestingAccount.BaseAccount.Coins[_0].Denom)
-EncodeInt(w, v.BaseVestingAccount.BaseAccount.Coins[_0].Amount)
-// end of v.BaseVestingAccount.BaseAccount.Coins[_0]
+codonEncodeByteSlice(1, w, func() []byte {
+wBuf := make([]byte, 0, 64)
+w := &wBuf
+codonEncodeString(0, w, v.BaseVestingAccount.BaseAccount.Coins[_0].Denom)
+codonEncodeByteSlice(1, w, EncodeInt(v.BaseVestingAccount.BaseAccount.Coins[_0].Amount))
+return wBuf
+}()) // end of v.BaseVestingAccount.BaseAccount.Coins[_0]
 }
-EncodePubKey(w, v.BaseVestingAccount.BaseAccount.PubKey)// interface_encode
-codonEncodeUvarint(w, uint64(v.BaseVestingAccount.BaseAccount.AccountNumber))
-codonEncodeUvarint(w, uint64(v.BaseVestingAccount.BaseAccount.Sequence))
-// end of v.BaseVestingAccount.BaseAccount
-codonEncodeVarint(w, int64(len(v.BaseVestingAccount.OriginalVesting)))
+codonEncodeByteSlice(2, w, func() []byte {
+w := make([]byte, 0, 64)
+EncodePubKey(&w, v.BaseVestingAccount.BaseAccount.PubKey)// interface_encode
+return w
+}()) // end of v.BaseVestingAccount.BaseAccount.PubKey
+codonEncodeUvarint(3, w, uint64(v.BaseVestingAccount.BaseAccount.AccountNumber))
+codonEncodeUvarint(4, w, uint64(v.BaseVestingAccount.BaseAccount.Sequence))
+return wBuf
+}()) // end of v.BaseVestingAccount.BaseAccount
 for _0:=0; _0<len(v.BaseVestingAccount.OriginalVesting); _0++ {
-codonEncodeString(w, v.BaseVestingAccount.OriginalVesting[_0].Denom)
-EncodeInt(w, v.BaseVestingAccount.OriginalVesting[_0].Amount)
-// end of v.BaseVestingAccount.OriginalVesting[_0]
+codonEncodeByteSlice(1, w, func() []byte {
+wBuf := make([]byte, 0, 64)
+w := &wBuf
+codonEncodeString(0, w, v.BaseVestingAccount.OriginalVesting[_0].Denom)
+codonEncodeByteSlice(1, w, EncodeInt(v.BaseVestingAccount.OriginalVesting[_0].Amount))
+return wBuf
+}()) // end of v.BaseVestingAccount.OriginalVesting[_0]
 }
-codonEncodeVarint(w, int64(len(v.BaseVestingAccount.DelegatedFree)))
 for _0:=0; _0<len(v.BaseVestingAccount.DelegatedFree); _0++ {
-codonEncodeString(w, v.BaseVestingAccount.DelegatedFree[_0].Denom)
-EncodeInt(w, v.BaseVestingAccount.DelegatedFree[_0].Amount)
-// end of v.BaseVestingAccount.DelegatedFree[_0]
+codonEncodeByteSlice(2, w, func() []byte {
+wBuf := make([]byte, 0, 64)
+w := &wBuf
+codonEncodeString(0, w, v.BaseVestingAccount.DelegatedFree[_0].Denom)
+codonEncodeByteSlice(1, w, EncodeInt(v.BaseVestingAccount.DelegatedFree[_0].Amount))
+return wBuf
+}()) // end of v.BaseVestingAccount.DelegatedFree[_0]
 }
-codonEncodeVarint(w, int64(len(v.BaseVestingAccount.DelegatedVesting)))
 for _0:=0; _0<len(v.BaseVestingAccount.DelegatedVesting); _0++ {
-codonEncodeString(w, v.BaseVestingAccount.DelegatedVesting[_0].Denom)
-EncodeInt(w, v.BaseVestingAccount.DelegatedVesting[_0].Amount)
-// end of v.BaseVestingAccount.DelegatedVesting[_0]
+codonEncodeByteSlice(3, w, func() []byte {
+wBuf := make([]byte, 0, 64)
+w := &wBuf
+codonEncodeString(0, w, v.BaseVestingAccount.DelegatedVesting[_0].Denom)
+codonEncodeByteSlice(1, w, EncodeInt(v.BaseVestingAccount.DelegatedVesting[_0].Amount))
+return wBuf
+}()) // end of v.BaseVestingAccount.DelegatedVesting[_0]
 }
-codonEncodeVarint(w, int64(v.BaseVestingAccount.EndTime))
-// end of v.BaseVestingAccount
-codonEncodeVarint(w, int64(v.StartTime))
+codonEncodeVarint(4, w, int64(v.BaseVestingAccount.EndTime))
+return wBuf
+}()) // end of v.BaseVestingAccount
+codonEncodeVarint(1, w, int64(v.StartTime))
 } //End of EncodeContinuousVestingAccount
 
-func DecodeContinuousVestingAccount(bz []byte) (ContinuousVestingAccount, int, error) {
-var err error
-var length int
-var v ContinuousVestingAccount
+func DecodeContinuousVestingAccount(bz []byte) (v ContinuousVestingAccount, total int, err error) {
 var n int
-var total int
+for len(bz) != 0 {
+tag := codonDecodeUint64(bz, &n, &err)
+if err != nil {return v, total, err}
+bz = bz[n:]
+total+=n
+tag = tag >> 3
+switch tag {
+case 0: // v.BaseVestingAccount
 v.BaseVestingAccount = &BaseVestingAccount{}
+l := codonDecodeUint64(bz, &n, &err)
+if err != nil {return}
+bz = bz[n:]
+total+=n
+func(bz []byte) {
+for len(bz) != 0 {
+tag := codonDecodeUint64(bz, &n, &err)
+if err != nil {return}
+bz = bz[n:]
+total+=n
+tag = tag >> 3
+switch tag {
+case 0: // v.BaseVestingAccount.BaseAccount
 v.BaseVestingAccount.BaseAccount = &BaseAccount{}
-length = codonDecodeInt(bz, &n, &err)
-if err != nil {return v, total, err}
+l := codonDecodeUint64(bz, &n, &err)
+if err != nil {return}
 bz = bz[n:]
 total+=n
-v.BaseVestingAccount.BaseAccount.Address, n, err = codonGetByteSlice(bz, length)
-if err != nil {return v, total, err}
+func(bz []byte) {
+for len(bz) != 0 {
+tag := codonDecodeUint64(bz, &n, &err)
+if err != nil {return}
 bz = bz[n:]
 total+=n
-length = codonDecodeInt(bz, &n, &err)
-if err != nil {return v, total, err}
+tag = tag >> 3
+switch tag {
+case 0: // v.BaseVestingAccount.BaseAccount.Address
+var tmpBz []byte
+n, err = codonGetByteSlice(&tmpBz, bz)
+if err != nil {return}
 bz = bz[n:]
 total+=n
-if length==0 {v.BaseVestingAccount.BaseAccount.Coins = nil
-} else {
-v.BaseVestingAccount.BaseAccount.Coins = make([]Coin, length)
-}
-for _0, length_0 := 0, length; _0<length_0; _0++ { //slice of struct
-v.BaseVestingAccount.BaseAccount.Coins[_0], n, err = DecodeCoin(bz)
-if err != nil {return v, total, err}
+v.BaseVestingAccount.BaseAccount.Address = tmpBz
+case 1: // v.BaseVestingAccount.BaseAccount.Coins
+var tmp Coin
+tmp, n, err = DecodeCoin(bz)
+if err != nil {return}
 bz = bz[n:]
 total+=n
-}
+v.BaseVestingAccount.BaseAccount.Coins = append(v.BaseVestingAccount.BaseAccount.Coins, tmp)
+case 2: // v.BaseVestingAccount.BaseAccount.PubKey
 v.BaseVestingAccount.BaseAccount.PubKey, n, err = DecodePubKey(bz)
-if err != nil {return v, total, err}
+if err != nil {return}
 bz = bz[n:]
 total+=n // interface_decode
+case 3: // v.BaseVestingAccount.BaseAccount.AccountNumber
 v.BaseVestingAccount.BaseAccount.AccountNumber = uint64(codonDecodeUint64(bz, &n, &err))
-if err != nil {return v, total, err}
+if err != nil {return}
 bz = bz[n:]
 total+=n
+case 4: // v.BaseVestingAccount.BaseAccount.Sequence
 v.BaseVestingAccount.BaseAccount.Sequence = uint64(codonDecodeUint64(bz, &n, &err))
-if err != nil {return v, total, err}
+if err != nil {return}
 bz = bz[n:]
 total+=n
-// end of v.BaseVestingAccount.BaseAccount
-length = codonDecodeInt(bz, &n, &err)
-if err != nil {return v, total, err}
-bz = bz[n:]
-total+=n
-if length==0 {v.BaseVestingAccount.OriginalVesting = nil
-} else {
-v.BaseVestingAccount.OriginalVesting = make([]Coin, length)
+default: err = errors.New("Unknown Field")
+return
 }
-for _0, length_0 := 0, length; _0<length_0; _0++ { //slice of struct
-v.BaseVestingAccount.OriginalVesting[_0], n, err = DecodeCoin(bz)
-if err != nil {return v, total, err}
+} // end for
+}(bz[:l]) // end func
+if err != nil {return}
+bz = bz[l:]
+n += int(l)
+case 1: // v.BaseVestingAccount.OriginalVesting
+var tmp Coin
+tmp, n, err = DecodeCoin(bz)
+if err != nil {return}
 bz = bz[n:]
 total+=n
-}
-length = codonDecodeInt(bz, &n, &err)
-if err != nil {return v, total, err}
+v.BaseVestingAccount.OriginalVesting = append(v.BaseVestingAccount.OriginalVesting, tmp)
+case 2: // v.BaseVestingAccount.DelegatedFree
+var tmp Coin
+tmp, n, err = DecodeCoin(bz)
+if err != nil {return}
 bz = bz[n:]
 total+=n
-if length==0 {v.BaseVestingAccount.DelegatedFree = nil
-} else {
-v.BaseVestingAccount.DelegatedFree = make([]Coin, length)
-}
-for _0, length_0 := 0, length; _0<length_0; _0++ { //slice of struct
-v.BaseVestingAccount.DelegatedFree[_0], n, err = DecodeCoin(bz)
-if err != nil {return v, total, err}
+v.BaseVestingAccount.DelegatedFree = append(v.BaseVestingAccount.DelegatedFree, tmp)
+case 3: // v.BaseVestingAccount.DelegatedVesting
+var tmp Coin
+tmp, n, err = DecodeCoin(bz)
+if err != nil {return}
 bz = bz[n:]
 total+=n
-}
-length = codonDecodeInt(bz, &n, &err)
-if err != nil {return v, total, err}
-bz = bz[n:]
-total+=n
-if length==0 {v.BaseVestingAccount.DelegatedVesting = nil
-} else {
-v.BaseVestingAccount.DelegatedVesting = make([]Coin, length)
-}
-for _0, length_0 := 0, length; _0<length_0; _0++ { //slice of struct
-v.BaseVestingAccount.DelegatedVesting[_0], n, err = DecodeCoin(bz)
-if err != nil {return v, total, err}
-bz = bz[n:]
-total+=n
-}
+v.BaseVestingAccount.DelegatedVesting = append(v.BaseVestingAccount.DelegatedVesting, tmp)
+case 4: // v.BaseVestingAccount.EndTime
 v.BaseVestingAccount.EndTime = int64(codonDecodeInt64(bz, &n, &err))
-if err != nil {return v, total, err}
+if err != nil {return}
 bz = bz[n:]
 total+=n
-// end of v.BaseVestingAccount
+default: err = errors.New("Unknown Field")
+return
+}
+} // end for
+}(bz[:l]) // end func
+if err != nil {return}
+bz = bz[l:]
+n += int(l)
+case 1: // v.StartTime
 v.StartTime = int64(codonDecodeInt64(bz, &n, &err))
-if err != nil {return v, total, err}
+if err != nil {return}
 bz = bz[n:]
 total+=n
+default: err = errors.New("Unknown Field")
+return
+}
+} // end for
 return v, total, nil
 } //End of DecodeContinuousVestingAccount
 
@@ -2342,129 +2558,175 @@ return
 
 // Non-Interface
 func EncodeDelayedVestingAccount(w *[]byte, v DelayedVestingAccount) {
-codonEncodeByteSlice(w, v.BaseVestingAccount.BaseAccount.Address[:])
-codonEncodeVarint(w, int64(len(v.BaseVestingAccount.BaseAccount.Coins)))
+codonEncodeByteSlice(0, w, func() []byte {
+wBuf := make([]byte, 0, 64)
+w := &wBuf
+codonEncodeByteSlice(0, w, func() []byte {
+wBuf := make([]byte, 0, 64)
+w := &wBuf
+codonEncodeByteSlice(0, w, v.BaseVestingAccount.BaseAccount.Address[:])
 for _0:=0; _0<len(v.BaseVestingAccount.BaseAccount.Coins); _0++ {
-codonEncodeString(w, v.BaseVestingAccount.BaseAccount.Coins[_0].Denom)
-EncodeInt(w, v.BaseVestingAccount.BaseAccount.Coins[_0].Amount)
-// end of v.BaseVestingAccount.BaseAccount.Coins[_0]
+codonEncodeByteSlice(1, w, func() []byte {
+wBuf := make([]byte, 0, 64)
+w := &wBuf
+codonEncodeString(0, w, v.BaseVestingAccount.BaseAccount.Coins[_0].Denom)
+codonEncodeByteSlice(1, w, EncodeInt(v.BaseVestingAccount.BaseAccount.Coins[_0].Amount))
+return wBuf
+}()) // end of v.BaseVestingAccount.BaseAccount.Coins[_0]
 }
-EncodePubKey(w, v.BaseVestingAccount.BaseAccount.PubKey)// interface_encode
-codonEncodeUvarint(w, uint64(v.BaseVestingAccount.BaseAccount.AccountNumber))
-codonEncodeUvarint(w, uint64(v.BaseVestingAccount.BaseAccount.Sequence))
-// end of v.BaseVestingAccount.BaseAccount
-codonEncodeVarint(w, int64(len(v.BaseVestingAccount.OriginalVesting)))
+codonEncodeByteSlice(2, w, func() []byte {
+w := make([]byte, 0, 64)
+EncodePubKey(&w, v.BaseVestingAccount.BaseAccount.PubKey)// interface_encode
+return w
+}()) // end of v.BaseVestingAccount.BaseAccount.PubKey
+codonEncodeUvarint(3, w, uint64(v.BaseVestingAccount.BaseAccount.AccountNumber))
+codonEncodeUvarint(4, w, uint64(v.BaseVestingAccount.BaseAccount.Sequence))
+return wBuf
+}()) // end of v.BaseVestingAccount.BaseAccount
 for _0:=0; _0<len(v.BaseVestingAccount.OriginalVesting); _0++ {
-codonEncodeString(w, v.BaseVestingAccount.OriginalVesting[_0].Denom)
-EncodeInt(w, v.BaseVestingAccount.OriginalVesting[_0].Amount)
-// end of v.BaseVestingAccount.OriginalVesting[_0]
+codonEncodeByteSlice(1, w, func() []byte {
+wBuf := make([]byte, 0, 64)
+w := &wBuf
+codonEncodeString(0, w, v.BaseVestingAccount.OriginalVesting[_0].Denom)
+codonEncodeByteSlice(1, w, EncodeInt(v.BaseVestingAccount.OriginalVesting[_0].Amount))
+return wBuf
+}()) // end of v.BaseVestingAccount.OriginalVesting[_0]
 }
-codonEncodeVarint(w, int64(len(v.BaseVestingAccount.DelegatedFree)))
 for _0:=0; _0<len(v.BaseVestingAccount.DelegatedFree); _0++ {
-codonEncodeString(w, v.BaseVestingAccount.DelegatedFree[_0].Denom)
-EncodeInt(w, v.BaseVestingAccount.DelegatedFree[_0].Amount)
-// end of v.BaseVestingAccount.DelegatedFree[_0]
+codonEncodeByteSlice(2, w, func() []byte {
+wBuf := make([]byte, 0, 64)
+w := &wBuf
+codonEncodeString(0, w, v.BaseVestingAccount.DelegatedFree[_0].Denom)
+codonEncodeByteSlice(1, w, EncodeInt(v.BaseVestingAccount.DelegatedFree[_0].Amount))
+return wBuf
+}()) // end of v.BaseVestingAccount.DelegatedFree[_0]
 }
-codonEncodeVarint(w, int64(len(v.BaseVestingAccount.DelegatedVesting)))
 for _0:=0; _0<len(v.BaseVestingAccount.DelegatedVesting); _0++ {
-codonEncodeString(w, v.BaseVestingAccount.DelegatedVesting[_0].Denom)
-EncodeInt(w, v.BaseVestingAccount.DelegatedVesting[_0].Amount)
-// end of v.BaseVestingAccount.DelegatedVesting[_0]
+codonEncodeByteSlice(3, w, func() []byte {
+wBuf := make([]byte, 0, 64)
+w := &wBuf
+codonEncodeString(0, w, v.BaseVestingAccount.DelegatedVesting[_0].Denom)
+codonEncodeByteSlice(1, w, EncodeInt(v.BaseVestingAccount.DelegatedVesting[_0].Amount))
+return wBuf
+}()) // end of v.BaseVestingAccount.DelegatedVesting[_0]
 }
-codonEncodeVarint(w, int64(v.BaseVestingAccount.EndTime))
-// end of v.BaseVestingAccount
+codonEncodeVarint(4, w, int64(v.BaseVestingAccount.EndTime))
+return wBuf
+}()) // end of v.BaseVestingAccount
 } //End of EncodeDelayedVestingAccount
 
-func DecodeDelayedVestingAccount(bz []byte) (DelayedVestingAccount, int, error) {
-var err error
-var length int
-var v DelayedVestingAccount
+func DecodeDelayedVestingAccount(bz []byte) (v DelayedVestingAccount, total int, err error) {
 var n int
-var total int
+for len(bz) != 0 {
+tag := codonDecodeUint64(bz, &n, &err)
+if err != nil {return v, total, err}
+bz = bz[n:]
+total+=n
+tag = tag >> 3
+switch tag {
+case 0: // v.BaseVestingAccount
 v.BaseVestingAccount = &BaseVestingAccount{}
+l := codonDecodeUint64(bz, &n, &err)
+if err != nil {return}
+bz = bz[n:]
+total+=n
+func(bz []byte) {
+for len(bz) != 0 {
+tag := codonDecodeUint64(bz, &n, &err)
+if err != nil {return}
+bz = bz[n:]
+total+=n
+tag = tag >> 3
+switch tag {
+case 0: // v.BaseVestingAccount.BaseAccount
 v.BaseVestingAccount.BaseAccount = &BaseAccount{}
-length = codonDecodeInt(bz, &n, &err)
-if err != nil {return v, total, err}
+l := codonDecodeUint64(bz, &n, &err)
+if err != nil {return}
 bz = bz[n:]
 total+=n
-v.BaseVestingAccount.BaseAccount.Address, n, err = codonGetByteSlice(bz, length)
-if err != nil {return v, total, err}
+func(bz []byte) {
+for len(bz) != 0 {
+tag := codonDecodeUint64(bz, &n, &err)
+if err != nil {return}
 bz = bz[n:]
 total+=n
-length = codonDecodeInt(bz, &n, &err)
-if err != nil {return v, total, err}
+tag = tag >> 3
+switch tag {
+case 0: // v.BaseVestingAccount.BaseAccount.Address
+var tmpBz []byte
+n, err = codonGetByteSlice(&tmpBz, bz)
+if err != nil {return}
 bz = bz[n:]
 total+=n
-if length==0 {v.BaseVestingAccount.BaseAccount.Coins = nil
-} else {
-v.BaseVestingAccount.BaseAccount.Coins = make([]Coin, length)
-}
-for _0, length_0 := 0, length; _0<length_0; _0++ { //slice of struct
-v.BaseVestingAccount.BaseAccount.Coins[_0], n, err = DecodeCoin(bz)
-if err != nil {return v, total, err}
+v.BaseVestingAccount.BaseAccount.Address = tmpBz
+case 1: // v.BaseVestingAccount.BaseAccount.Coins
+var tmp Coin
+tmp, n, err = DecodeCoin(bz)
+if err != nil {return}
 bz = bz[n:]
 total+=n
-}
+v.BaseVestingAccount.BaseAccount.Coins = append(v.BaseVestingAccount.BaseAccount.Coins, tmp)
+case 2: // v.BaseVestingAccount.BaseAccount.PubKey
 v.BaseVestingAccount.BaseAccount.PubKey, n, err = DecodePubKey(bz)
-if err != nil {return v, total, err}
+if err != nil {return}
 bz = bz[n:]
 total+=n // interface_decode
+case 3: // v.BaseVestingAccount.BaseAccount.AccountNumber
 v.BaseVestingAccount.BaseAccount.AccountNumber = uint64(codonDecodeUint64(bz, &n, &err))
-if err != nil {return v, total, err}
+if err != nil {return}
 bz = bz[n:]
 total+=n
+case 4: // v.BaseVestingAccount.BaseAccount.Sequence
 v.BaseVestingAccount.BaseAccount.Sequence = uint64(codonDecodeUint64(bz, &n, &err))
-if err != nil {return v, total, err}
+if err != nil {return}
 bz = bz[n:]
 total+=n
-// end of v.BaseVestingAccount.BaseAccount
-length = codonDecodeInt(bz, &n, &err)
-if err != nil {return v, total, err}
-bz = bz[n:]
-total+=n
-if length==0 {v.BaseVestingAccount.OriginalVesting = nil
-} else {
-v.BaseVestingAccount.OriginalVesting = make([]Coin, length)
+default: err = errors.New("Unknown Field")
+return
 }
-for _0, length_0 := 0, length; _0<length_0; _0++ { //slice of struct
-v.BaseVestingAccount.OriginalVesting[_0], n, err = DecodeCoin(bz)
-if err != nil {return v, total, err}
+} // end for
+}(bz[:l]) // end func
+if err != nil {return}
+bz = bz[l:]
+n += int(l)
+case 1: // v.BaseVestingAccount.OriginalVesting
+var tmp Coin
+tmp, n, err = DecodeCoin(bz)
+if err != nil {return}
 bz = bz[n:]
 total+=n
-}
-length = codonDecodeInt(bz, &n, &err)
-if err != nil {return v, total, err}
+v.BaseVestingAccount.OriginalVesting = append(v.BaseVestingAccount.OriginalVesting, tmp)
+case 2: // v.BaseVestingAccount.DelegatedFree
+var tmp Coin
+tmp, n, err = DecodeCoin(bz)
+if err != nil {return}
 bz = bz[n:]
 total+=n
-if length==0 {v.BaseVestingAccount.DelegatedFree = nil
-} else {
-v.BaseVestingAccount.DelegatedFree = make([]Coin, length)
-}
-for _0, length_0 := 0, length; _0<length_0; _0++ { //slice of struct
-v.BaseVestingAccount.DelegatedFree[_0], n, err = DecodeCoin(bz)
-if err != nil {return v, total, err}
+v.BaseVestingAccount.DelegatedFree = append(v.BaseVestingAccount.DelegatedFree, tmp)
+case 3: // v.BaseVestingAccount.DelegatedVesting
+var tmp Coin
+tmp, n, err = DecodeCoin(bz)
+if err != nil {return}
 bz = bz[n:]
 total+=n
-}
-length = codonDecodeInt(bz, &n, &err)
-if err != nil {return v, total, err}
-bz = bz[n:]
-total+=n
-if length==0 {v.BaseVestingAccount.DelegatedVesting = nil
-} else {
-v.BaseVestingAccount.DelegatedVesting = make([]Coin, length)
-}
-for _0, length_0 := 0, length; _0<length_0; _0++ { //slice of struct
-v.BaseVestingAccount.DelegatedVesting[_0], n, err = DecodeCoin(bz)
-if err != nil {return v, total, err}
-bz = bz[n:]
-total+=n
-}
+v.BaseVestingAccount.DelegatedVesting = append(v.BaseVestingAccount.DelegatedVesting, tmp)
+case 4: // v.BaseVestingAccount.EndTime
 v.BaseVestingAccount.EndTime = int64(codonDecodeInt64(bz, &n, &err))
-if err != nil {return v, total, err}
+if err != nil {return}
 bz = bz[n:]
 total+=n
-// end of v.BaseVestingAccount
+default: err = errors.New("Unknown Field")
+return
+}
+} // end for
+}(bz[:l]) // end func
+if err != nil {return}
+bz = bz[l:]
+n += int(l)
+default: err = errors.New("Unknown Field")
+return
+}
+} // end for
 return v, total, nil
 } //End of DecodeDelayedVestingAccount
 
@@ -2569,84 +2831,110 @@ return
 
 // Non-Interface
 func EncodeModuleAccount(w *[]byte, v ModuleAccount) {
-codonEncodeByteSlice(w, v.BaseAccount.Address[:])
-codonEncodeVarint(w, int64(len(v.BaseAccount.Coins)))
+codonEncodeByteSlice(0, w, func() []byte {
+wBuf := make([]byte, 0, 64)
+w := &wBuf
+codonEncodeByteSlice(0, w, v.BaseAccount.Address[:])
 for _0:=0; _0<len(v.BaseAccount.Coins); _0++ {
-codonEncodeString(w, v.BaseAccount.Coins[_0].Denom)
-EncodeInt(w, v.BaseAccount.Coins[_0].Amount)
-// end of v.BaseAccount.Coins[_0]
+codonEncodeByteSlice(1, w, func() []byte {
+wBuf := make([]byte, 0, 64)
+w := &wBuf
+codonEncodeString(0, w, v.BaseAccount.Coins[_0].Denom)
+codonEncodeByteSlice(1, w, EncodeInt(v.BaseAccount.Coins[_0].Amount))
+return wBuf
+}()) // end of v.BaseAccount.Coins[_0]
 }
-EncodePubKey(w, v.BaseAccount.PubKey)// interface_encode
-codonEncodeUvarint(w, uint64(v.BaseAccount.AccountNumber))
-codonEncodeUvarint(w, uint64(v.BaseAccount.Sequence))
-// end of v.BaseAccount
-codonEncodeString(w, v.Name)
-codonEncodeVarint(w, int64(len(v.Permissions)))
+codonEncodeByteSlice(2, w, func() []byte {
+w := make([]byte, 0, 64)
+EncodePubKey(&w, v.BaseAccount.PubKey)// interface_encode
+return w
+}()) // end of v.BaseAccount.PubKey
+codonEncodeUvarint(3, w, uint64(v.BaseAccount.AccountNumber))
+codonEncodeUvarint(4, w, uint64(v.BaseAccount.Sequence))
+return wBuf
+}()) // end of v.BaseAccount
+codonEncodeString(1, w, v.Name)
 for _0:=0; _0<len(v.Permissions); _0++ {
-codonEncodeString(w, v.Permissions[_0])
+codonEncodeString(2, w, v.Permissions[_0])
 }
 } //End of EncodeModuleAccount
 
-func DecodeModuleAccount(bz []byte) (ModuleAccount, int, error) {
-var err error
-var length int
-var v ModuleAccount
+func DecodeModuleAccount(bz []byte) (v ModuleAccount, total int, err error) {
 var n int
-var total int
+for len(bz) != 0 {
+tag := codonDecodeUint64(bz, &n, &err)
+if err != nil {return v, total, err}
+bz = bz[n:]
+total+=n
+tag = tag >> 3
+switch tag {
+case 0: // v.BaseAccount
 v.BaseAccount = &BaseAccount{}
-length = codonDecodeInt(bz, &n, &err)
-if err != nil {return v, total, err}
+l := codonDecodeUint64(bz, &n, &err)
+if err != nil {return}
 bz = bz[n:]
 total+=n
-v.BaseAccount.Address, n, err = codonGetByteSlice(bz, length)
-if err != nil {return v, total, err}
+func(bz []byte) {
+for len(bz) != 0 {
+tag := codonDecodeUint64(bz, &n, &err)
+if err != nil {return}
 bz = bz[n:]
 total+=n
-length = codonDecodeInt(bz, &n, &err)
-if err != nil {return v, total, err}
+tag = tag >> 3
+switch tag {
+case 0: // v.BaseAccount.Address
+var tmpBz []byte
+n, err = codonGetByteSlice(&tmpBz, bz)
+if err != nil {return}
 bz = bz[n:]
 total+=n
-if length==0 {v.BaseAccount.Coins = nil
-} else {
-v.BaseAccount.Coins = make([]Coin, length)
-}
-for _0, length_0 := 0, length; _0<length_0; _0++ { //slice of struct
-v.BaseAccount.Coins[_0], n, err = DecodeCoin(bz)
-if err != nil {return v, total, err}
+v.BaseAccount.Address = tmpBz
+case 1: // v.BaseAccount.Coins
+var tmp Coin
+tmp, n, err = DecodeCoin(bz)
+if err != nil {return}
 bz = bz[n:]
 total+=n
-}
+v.BaseAccount.Coins = append(v.BaseAccount.Coins, tmp)
+case 2: // v.BaseAccount.PubKey
 v.BaseAccount.PubKey, n, err = DecodePubKey(bz)
-if err != nil {return v, total, err}
+if err != nil {return}
 bz = bz[n:]
 total+=n // interface_decode
+case 3: // v.BaseAccount.AccountNumber
 v.BaseAccount.AccountNumber = uint64(codonDecodeUint64(bz, &n, &err))
-if err != nil {return v, total, err}
+if err != nil {return}
 bz = bz[n:]
 total+=n
+case 4: // v.BaseAccount.Sequence
 v.BaseAccount.Sequence = uint64(codonDecodeUint64(bz, &n, &err))
-if err != nil {return v, total, err}
+if err != nil {return}
 bz = bz[n:]
 total+=n
-// end of v.BaseAccount
+default: err = errors.New("Unknown Field")
+return
+}
+} // end for
+}(bz[:l]) // end func
+if err != nil {return}
+bz = bz[l:]
+n += int(l)
+case 1: // v.Name
 v.Name = string(codonDecodeString(bz, &n, &err))
-if err != nil {return v, total, err}
+if err != nil {return}
 bz = bz[n:]
 total+=n
-length = codonDecodeInt(bz, &n, &err)
-if err != nil {return v, total, err}
+case 2: // v.Permissions
+var tmp string
+tmp = string(codonDecodeString(bz, &n, &err))
+if err != nil {return}
 bz = bz[n:]
 total+=n
-if length==0 {v.Permissions = nil
-} else {
-v.Permissions = make([]string, length)
+v.Permissions = append(v.Permissions, tmp)
+default: err = errors.New("Unknown Field")
+return
 }
-for _0, length_0 := 0, length; _0<length_0; _0++ { //slice of string
-v.Permissions[_0] = string(codonDecodeString(bz, &n, &err))
-if err != nil {return v, total, err}
-bz = bz[n:]
-total+=n
-}
+} // end for
 return v, total, nil
 } //End of DecodeModuleAccount
 
@@ -2715,84 +3003,109 @@ return
 
 // Non-Interface
 func EncodeStdTx(w *[]byte, v StdTx) {
-codonEncodeVarint(w, int64(len(v.Msgs)))
 for _0:=0; _0<len(v.Msgs); _0++ {
-EncodeMsg(w, v.Msgs[_0])// interface_encode
+codonEncodeByteSlice(0, w, func() []byte {
+w := make([]byte, 0, 64)
+EncodeMsg(&w, v.Msgs[_0])// interface_encode
+return w
+}()) // end of v.Msgs[_0]
 }
-codonEncodeVarint(w, int64(len(v.Fee.Amount)))
+codonEncodeByteSlice(1, w, func() []byte {
+wBuf := make([]byte, 0, 64)
+w := &wBuf
 for _0:=0; _0<len(v.Fee.Amount); _0++ {
-codonEncodeString(w, v.Fee.Amount[_0].Denom)
-EncodeInt(w, v.Fee.Amount[_0].Amount)
-// end of v.Fee.Amount[_0]
+codonEncodeByteSlice(0, w, func() []byte {
+wBuf := make([]byte, 0, 64)
+w := &wBuf
+codonEncodeString(0, w, v.Fee.Amount[_0].Denom)
+codonEncodeByteSlice(1, w, EncodeInt(v.Fee.Amount[_0].Amount))
+return wBuf
+}()) // end of v.Fee.Amount[_0]
 }
-codonEncodeUvarint(w, uint64(v.Fee.Gas))
-// end of v.Fee
-codonEncodeVarint(w, int64(len(v.Signatures)))
+codonEncodeUvarint(1, w, uint64(v.Fee.Gas))
+return wBuf
+}()) // end of v.Fee
 for _0:=0; _0<len(v.Signatures); _0++ {
-EncodePubKey(w, v.Signatures[_0].PubKey)// interface_encode
-codonEncodeByteSlice(w, v.Signatures[_0].Signature[:])
-// end of v.Signatures[_0]
+codonEncodeByteSlice(2, w, func() []byte {
+wBuf := make([]byte, 0, 64)
+w := &wBuf
+codonEncodeByteSlice(0, w, func() []byte {
+w := make([]byte, 0, 64)
+EncodePubKey(&w, v.Signatures[_0].PubKey)// interface_encode
+return w
+}()) // end of v.Signatures[_0].PubKey
+codonEncodeByteSlice(1, w, v.Signatures[_0].Signature[:])
+return wBuf
+}()) // end of v.Signatures[_0]
 }
-codonEncodeString(w, v.Memo)
+codonEncodeString(3, w, v.Memo)
 } //End of EncodeStdTx
 
-func DecodeStdTx(bz []byte) (StdTx, int, error) {
-var err error
-var length int
-var v StdTx
+func DecodeStdTx(bz []byte) (v StdTx, total int, err error) {
 var n int
-var total int
-length = codonDecodeInt(bz, &n, &err)
+for len(bz) != 0 {
+tag := codonDecodeUint64(bz, &n, &err)
 if err != nil {return v, total, err}
 bz = bz[n:]
 total+=n
-if length==0 {v.Msgs = nil
-} else {
-v.Msgs = make([]Msg, length)
-}
-for _0, length_0 := 0, length; _0<length_0; _0++ { //slice of interface
-v.Msgs[_0], n, err = DecodeMsg(bz)
-if err != nil {return v, total, err}
+tag = tag >> 3
+switch tag {
+case 0: // v.Msgs
+var tmp Msg
+tmp, n, err = DecodeMsg(bz)
+if err != nil {return}
 bz = bz[n:]
 total+=n
-}
-length = codonDecodeInt(bz, &n, &err)
-if err != nil {return v, total, err}
+v.Msgs = append(v.Msgs, tmp)
+case 1: // v.Fee
+l := codonDecodeUint64(bz, &n, &err)
+if err != nil {return}
 bz = bz[n:]
 total+=n
-if length==0 {v.Fee.Amount = nil
-} else {
-v.Fee.Amount = make([]Coin, length)
-}
-for _0, length_0 := 0, length; _0<length_0; _0++ { //slice of struct
-v.Fee.Amount[_0], n, err = DecodeCoin(bz)
-if err != nil {return v, total, err}
+func(bz []byte) {
+for len(bz) != 0 {
+tag := codonDecodeUint64(bz, &n, &err)
+if err != nil {return}
 bz = bz[n:]
 total+=n
-}
+tag = tag >> 3
+switch tag {
+case 0: // v.Fee.Amount
+var tmp Coin
+tmp, n, err = DecodeCoin(bz)
+if err != nil {return}
+bz = bz[n:]
+total+=n
+v.Fee.Amount = append(v.Fee.Amount, tmp)
+case 1: // v.Fee.Gas
 v.Fee.Gas = uint64(codonDecodeUint64(bz, &n, &err))
-if err != nil {return v, total, err}
+if err != nil {return}
 bz = bz[n:]
 total+=n
-// end of v.Fee
-length = codonDecodeInt(bz, &n, &err)
-if err != nil {return v, total, err}
-bz = bz[n:]
-total+=n
-if length==0 {v.Signatures = nil
-} else {
-v.Signatures = make([]StdSignature, length)
+default: err = errors.New("Unknown Field")
+return
 }
-for _0, length_0 := 0, length; _0<length_0; _0++ { //slice of struct
-v.Signatures[_0], n, err = DecodeStdSignature(bz)
-if err != nil {return v, total, err}
+} // end for
+}(bz[:l]) // end func
+if err != nil {return}
+bz = bz[l:]
+n += int(l)
+case 2: // v.Signatures
+var tmp StdSignature
+tmp, n, err = DecodeStdSignature(bz)
+if err != nil {return}
 bz = bz[n:]
 total+=n
-}
+v.Signatures = append(v.Signatures, tmp)
+case 3: // v.Memo
 v.Memo = string(codonDecodeString(bz, &n, &err))
-if err != nil {return v, total, err}
+if err != nil {return}
 bz = bz[n:]
 total+=n
+default: err = errors.New("Unknown Field")
+return
+}
+} // end for
 return v, total, nil
 } //End of DecodeStdTx
 
@@ -2863,53 +3176,83 @@ return
 
 // Non-Interface
 func EncodeMsgBeginRedelegate(w *[]byte, v MsgBeginRedelegate) {
-codonEncodeByteSlice(w, v.DelegatorAddress[:])
-codonEncodeByteSlice(w, v.ValidatorSrcAddress[:])
-codonEncodeByteSlice(w, v.ValidatorDstAddress[:])
-codonEncodeString(w, v.Amount.Denom)
-EncodeInt(w, v.Amount.Amount)
-// end of v.Amount
+codonEncodeByteSlice(0, w, v.DelegatorAddress[:])
+codonEncodeByteSlice(1, w, v.ValidatorSrcAddress[:])
+codonEncodeByteSlice(2, w, v.ValidatorDstAddress[:])
+codonEncodeByteSlice(3, w, func() []byte {
+wBuf := make([]byte, 0, 64)
+w := &wBuf
+codonEncodeString(0, w, v.Amount.Denom)
+codonEncodeByteSlice(1, w, EncodeInt(v.Amount.Amount))
+return wBuf
+}()) // end of v.Amount
 } //End of EncodeMsgBeginRedelegate
 
-func DecodeMsgBeginRedelegate(bz []byte) (MsgBeginRedelegate, int, error) {
-var err error
-var length int
-var v MsgBeginRedelegate
+func DecodeMsgBeginRedelegate(bz []byte) (v MsgBeginRedelegate, total int, err error) {
 var n int
-var total int
-length = codonDecodeInt(bz, &n, &err)
+for len(bz) != 0 {
+tag := codonDecodeUint64(bz, &n, &err)
 if err != nil {return v, total, err}
 bz = bz[n:]
 total+=n
-v.DelegatorAddress, n, err = codonGetByteSlice(bz, length)
-if err != nil {return v, total, err}
+tag = tag >> 3
+switch tag {
+case 0: // v.DelegatorAddress
+var tmpBz []byte
+n, err = codonGetByteSlice(&tmpBz, bz)
+if err != nil {return}
 bz = bz[n:]
 total+=n
-length = codonDecodeInt(bz, &n, &err)
-if err != nil {return v, total, err}
+v.DelegatorAddress = tmpBz
+case 1: // v.ValidatorSrcAddress
+var tmpBz []byte
+n, err = codonGetByteSlice(&tmpBz, bz)
+if err != nil {return}
 bz = bz[n:]
 total+=n
-v.ValidatorSrcAddress, n, err = codonGetByteSlice(bz, length)
-if err != nil {return v, total, err}
+v.ValidatorSrcAddress = tmpBz
+case 2: // v.ValidatorDstAddress
+var tmpBz []byte
+n, err = codonGetByteSlice(&tmpBz, bz)
+if err != nil {return}
 bz = bz[n:]
 total+=n
-length = codonDecodeInt(bz, &n, &err)
-if err != nil {return v, total, err}
+v.ValidatorDstAddress = tmpBz
+case 3: // v.Amount
+l := codonDecodeUint64(bz, &n, &err)
+if err != nil {return}
 bz = bz[n:]
 total+=n
-v.ValidatorDstAddress, n, err = codonGetByteSlice(bz, length)
-if err != nil {return v, total, err}
+func(bz []byte) {
+for len(bz) != 0 {
+tag := codonDecodeUint64(bz, &n, &err)
+if err != nil {return}
 bz = bz[n:]
 total+=n
+tag = tag >> 3
+switch tag {
+case 0: // v.Amount.Denom
 v.Amount.Denom = string(codonDecodeString(bz, &n, &err))
-if err != nil {return v, total, err}
+if err != nil {return}
 bz = bz[n:]
 total+=n
+case 1: // v.Amount.Amount
 v.Amount.Amount, n, err = DecodeInt(bz)
-if err != nil {return v, total, err}
+if err != nil {return}
 bz = bz[n:]
 total+=n
-// end of v.Amount
+default: err = errors.New("Unknown Field")
+return
+}
+} // end for
+}(bz[:l]) // end func
+if err != nil {return}
+bz = bz[l:]
+n += int(l)
+default: err = errors.New("Unknown Field")
+return
+}
+} // end for
 return v, total, nil
 } //End of DecodeMsgBeginRedelegate
 
@@ -2956,93 +3299,185 @@ return
 
 // Non-Interface
 func EncodeMsgCreateValidator(w *[]byte, v MsgCreateValidator) {
-codonEncodeString(w, v.Description.Moniker)
-codonEncodeString(w, v.Description.Identity)
-codonEncodeString(w, v.Description.Website)
-codonEncodeString(w, v.Description.Details)
-// end of v.Description
-EncodeDec(w, v.Commission.Rate)
-EncodeDec(w, v.Commission.MaxRate)
-EncodeDec(w, v.Commission.MaxChangeRate)
-// end of v.Commission
-EncodeInt(w, v.MinSelfDelegation)
-codonEncodeByteSlice(w, v.DelegatorAddress[:])
-codonEncodeByteSlice(w, v.ValidatorAddress[:])
-EncodePubKey(w, v.PubKey)// interface_encode
-codonEncodeString(w, v.Value.Denom)
-EncodeInt(w, v.Value.Amount)
-// end of v.Value
+codonEncodeByteSlice(0, w, func() []byte {
+wBuf := make([]byte, 0, 64)
+w := &wBuf
+codonEncodeString(0, w, v.Description.Moniker)
+codonEncodeString(1, w, v.Description.Identity)
+codonEncodeString(2, w, v.Description.Website)
+codonEncodeString(3, w, v.Description.Details)
+return wBuf
+}()) // end of v.Description
+codonEncodeByteSlice(1, w, func() []byte {
+wBuf := make([]byte, 0, 64)
+w := &wBuf
+codonEncodeByteSlice(0, w, EncodeDec(v.Commission.Rate))
+codonEncodeByteSlice(1, w, EncodeDec(v.Commission.MaxRate))
+codonEncodeByteSlice(2, w, EncodeDec(v.Commission.MaxChangeRate))
+return wBuf
+}()) // end of v.Commission
+codonEncodeByteSlice(2, w, EncodeInt(v.MinSelfDelegation))
+codonEncodeByteSlice(3, w, v.DelegatorAddress[:])
+codonEncodeByteSlice(4, w, v.ValidatorAddress[:])
+codonEncodeByteSlice(5, w, func() []byte {
+w := make([]byte, 0, 64)
+EncodePubKey(&w, v.PubKey)// interface_encode
+return w
+}()) // end of v.PubKey
+codonEncodeByteSlice(6, w, func() []byte {
+wBuf := make([]byte, 0, 64)
+w := &wBuf
+codonEncodeString(0, w, v.Value.Denom)
+codonEncodeByteSlice(1, w, EncodeInt(v.Value.Amount))
+return wBuf
+}()) // end of v.Value
 } //End of EncodeMsgCreateValidator
 
-func DecodeMsgCreateValidator(bz []byte) (MsgCreateValidator, int, error) {
-var err error
-var length int
-var v MsgCreateValidator
+func DecodeMsgCreateValidator(bz []byte) (v MsgCreateValidator, total int, err error) {
 var n int
-var total int
+for len(bz) != 0 {
+tag := codonDecodeUint64(bz, &n, &err)
+if err != nil {return v, total, err}
+bz = bz[n:]
+total+=n
+tag = tag >> 3
+switch tag {
+case 0: // v.Description
+l := codonDecodeUint64(bz, &n, &err)
+if err != nil {return}
+bz = bz[n:]
+total+=n
+func(bz []byte) {
+for len(bz) != 0 {
+tag := codonDecodeUint64(bz, &n, &err)
+if err != nil {return}
+bz = bz[n:]
+total+=n
+tag = tag >> 3
+switch tag {
+case 0: // v.Description.Moniker
 v.Description.Moniker = string(codonDecodeString(bz, &n, &err))
-if err != nil {return v, total, err}
+if err != nil {return}
 bz = bz[n:]
 total+=n
+case 1: // v.Description.Identity
 v.Description.Identity = string(codonDecodeString(bz, &n, &err))
-if err != nil {return v, total, err}
+if err != nil {return}
 bz = bz[n:]
 total+=n
+case 2: // v.Description.Website
 v.Description.Website = string(codonDecodeString(bz, &n, &err))
-if err != nil {return v, total, err}
+if err != nil {return}
 bz = bz[n:]
 total+=n
+case 3: // v.Description.Details
 v.Description.Details = string(codonDecodeString(bz, &n, &err))
-if err != nil {return v, total, err}
+if err != nil {return}
 bz = bz[n:]
 total+=n
-// end of v.Description
+default: err = errors.New("Unknown Field")
+return
+}
+} // end for
+}(bz[:l]) // end func
+if err != nil {return}
+bz = bz[l:]
+n += int(l)
+case 1: // v.Commission
+l := codonDecodeUint64(bz, &n, &err)
+if err != nil {return}
+bz = bz[n:]
+total+=n
+func(bz []byte) {
+for len(bz) != 0 {
+tag := codonDecodeUint64(bz, &n, &err)
+if err != nil {return}
+bz = bz[n:]
+total+=n
+tag = tag >> 3
+switch tag {
+case 0: // v.Commission.Rate
 v.Commission.Rate, n, err = DecodeDec(bz)
-if err != nil {return v, total, err}
+if err != nil {return}
 bz = bz[n:]
 total+=n
+case 1: // v.Commission.MaxRate
 v.Commission.MaxRate, n, err = DecodeDec(bz)
-if err != nil {return v, total, err}
+if err != nil {return}
 bz = bz[n:]
 total+=n
+case 2: // v.Commission.MaxChangeRate
 v.Commission.MaxChangeRate, n, err = DecodeDec(bz)
-if err != nil {return v, total, err}
+if err != nil {return}
 bz = bz[n:]
 total+=n
-// end of v.Commission
+default: err = errors.New("Unknown Field")
+return
+}
+} // end for
+}(bz[:l]) // end func
+if err != nil {return}
+bz = bz[l:]
+n += int(l)
+case 2: // v.MinSelfDelegation
 v.MinSelfDelegation, n, err = DecodeInt(bz)
-if err != nil {return v, total, err}
+if err != nil {return}
 bz = bz[n:]
 total+=n
-length = codonDecodeInt(bz, &n, &err)
-if err != nil {return v, total, err}
+case 3: // v.DelegatorAddress
+var tmpBz []byte
+n, err = codonGetByteSlice(&tmpBz, bz)
+if err != nil {return}
 bz = bz[n:]
 total+=n
-v.DelegatorAddress, n, err = codonGetByteSlice(bz, length)
-if err != nil {return v, total, err}
+v.DelegatorAddress = tmpBz
+case 4: // v.ValidatorAddress
+var tmpBz []byte
+n, err = codonGetByteSlice(&tmpBz, bz)
+if err != nil {return}
 bz = bz[n:]
 total+=n
-length = codonDecodeInt(bz, &n, &err)
-if err != nil {return v, total, err}
-bz = bz[n:]
-total+=n
-v.ValidatorAddress, n, err = codonGetByteSlice(bz, length)
-if err != nil {return v, total, err}
-bz = bz[n:]
-total+=n
+v.ValidatorAddress = tmpBz
+case 5: // v.PubKey
 v.PubKey, n, err = DecodePubKey(bz)
-if err != nil {return v, total, err}
+if err != nil {return}
 bz = bz[n:]
 total+=n // interface_decode
+case 6: // v.Value
+l := codonDecodeUint64(bz, &n, &err)
+if err != nil {return}
+bz = bz[n:]
+total+=n
+func(bz []byte) {
+for len(bz) != 0 {
+tag := codonDecodeUint64(bz, &n, &err)
+if err != nil {return}
+bz = bz[n:]
+total+=n
+tag = tag >> 3
+switch tag {
+case 0: // v.Value.Denom
 v.Value.Denom = string(codonDecodeString(bz, &n, &err))
-if err != nil {return v, total, err}
+if err != nil {return}
 bz = bz[n:]
 total+=n
+case 1: // v.Value.Amount
 v.Value.Amount, n, err = DecodeInt(bz)
-if err != nil {return v, total, err}
+if err != nil {return}
 bz = bz[n:]
 total+=n
-// end of v.Value
+default: err = errors.New("Unknown Field")
+return
+}
+} // end for
+}(bz[:l]) // end func
+if err != nil {return}
+bz = bz[l:]
+n += int(l)
+default: err = errors.New("Unknown Field")
+return
+}
+} // end for
 return v, total, nil
 } //End of DecodeMsgCreateValidator
 
@@ -3103,44 +3538,75 @@ return
 
 // Non-Interface
 func EncodeMsgDelegate(w *[]byte, v MsgDelegate) {
-codonEncodeByteSlice(w, v.DelegatorAddress[:])
-codonEncodeByteSlice(w, v.ValidatorAddress[:])
-codonEncodeString(w, v.Amount.Denom)
-EncodeInt(w, v.Amount.Amount)
-// end of v.Amount
+codonEncodeByteSlice(0, w, v.DelegatorAddress[:])
+codonEncodeByteSlice(1, w, v.ValidatorAddress[:])
+codonEncodeByteSlice(2, w, func() []byte {
+wBuf := make([]byte, 0, 64)
+w := &wBuf
+codonEncodeString(0, w, v.Amount.Denom)
+codonEncodeByteSlice(1, w, EncodeInt(v.Amount.Amount))
+return wBuf
+}()) // end of v.Amount
 } //End of EncodeMsgDelegate
 
-func DecodeMsgDelegate(bz []byte) (MsgDelegate, int, error) {
-var err error
-var length int
-var v MsgDelegate
+func DecodeMsgDelegate(bz []byte) (v MsgDelegate, total int, err error) {
 var n int
-var total int
-length = codonDecodeInt(bz, &n, &err)
+for len(bz) != 0 {
+tag := codonDecodeUint64(bz, &n, &err)
 if err != nil {return v, total, err}
 bz = bz[n:]
 total+=n
-v.DelegatorAddress, n, err = codonGetByteSlice(bz, length)
-if err != nil {return v, total, err}
+tag = tag >> 3
+switch tag {
+case 0: // v.DelegatorAddress
+var tmpBz []byte
+n, err = codonGetByteSlice(&tmpBz, bz)
+if err != nil {return}
 bz = bz[n:]
 total+=n
-length = codonDecodeInt(bz, &n, &err)
-if err != nil {return v, total, err}
+v.DelegatorAddress = tmpBz
+case 1: // v.ValidatorAddress
+var tmpBz []byte
+n, err = codonGetByteSlice(&tmpBz, bz)
+if err != nil {return}
 bz = bz[n:]
 total+=n
-v.ValidatorAddress, n, err = codonGetByteSlice(bz, length)
-if err != nil {return v, total, err}
+v.ValidatorAddress = tmpBz
+case 2: // v.Amount
+l := codonDecodeUint64(bz, &n, &err)
+if err != nil {return}
 bz = bz[n:]
 total+=n
+func(bz []byte) {
+for len(bz) != 0 {
+tag := codonDecodeUint64(bz, &n, &err)
+if err != nil {return}
+bz = bz[n:]
+total+=n
+tag = tag >> 3
+switch tag {
+case 0: // v.Amount.Denom
 v.Amount.Denom = string(codonDecodeString(bz, &n, &err))
-if err != nil {return v, total, err}
+if err != nil {return}
 bz = bz[n:]
 total+=n
+case 1: // v.Amount.Amount
 v.Amount.Amount, n, err = DecodeInt(bz)
-if err != nil {return v, total, err}
+if err != nil {return}
 bz = bz[n:]
 total+=n
-// end of v.Amount
+default: err = errors.New("Unknown Field")
+return
+}
+} // end for
+}(bz[:l]) // end func
+if err != nil {return}
+bz = bz[l:]
+n += int(l)
+default: err = errors.New("Unknown Field")
+return
+}
+} // end for
 return v, total, nil
 } //End of DecodeMsgDelegate
 
@@ -3179,57 +3645,93 @@ return
 
 // Non-Interface
 func EncodeMsgEditValidator(w *[]byte, v MsgEditValidator) {
-codonEncodeString(w, v.Description.Moniker)
-codonEncodeString(w, v.Description.Identity)
-codonEncodeString(w, v.Description.Website)
-codonEncodeString(w, v.Description.Details)
-// end of v.Description
-codonEncodeByteSlice(w, v.ValidatorAddress[:])
-EncodeDec(w, *(v.CommissionRate))
-EncodeInt(w, *(v.MinSelfDelegation))
+codonEncodeByteSlice(0, w, func() []byte {
+wBuf := make([]byte, 0, 64)
+w := &wBuf
+codonEncodeString(0, w, v.Description.Moniker)
+codonEncodeString(1, w, v.Description.Identity)
+codonEncodeString(2, w, v.Description.Website)
+codonEncodeString(3, w, v.Description.Details)
+return wBuf
+}()) // end of v.Description
+codonEncodeByteSlice(1, w, v.ValidatorAddress[:])
+codonEncodeByteSlice(2, w, EncodeDec(*(v.CommissionRate)))
+codonEncodeByteSlice(3, w, EncodeInt(*(v.MinSelfDelegation)))
 } //End of EncodeMsgEditValidator
 
-func DecodeMsgEditValidator(bz []byte) (MsgEditValidator, int, error) {
-var err error
-var length int
-var v MsgEditValidator
+func DecodeMsgEditValidator(bz []byte) (v MsgEditValidator, total int, err error) {
 var n int
-var total int
+for len(bz) != 0 {
+tag := codonDecodeUint64(bz, &n, &err)
+if err != nil {return v, total, err}
+bz = bz[n:]
+total+=n
+tag = tag >> 3
+switch tag {
+case 0: // v.Description
+l := codonDecodeUint64(bz, &n, &err)
+if err != nil {return}
+bz = bz[n:]
+total+=n
+func(bz []byte) {
+for len(bz) != 0 {
+tag := codonDecodeUint64(bz, &n, &err)
+if err != nil {return}
+bz = bz[n:]
+total+=n
+tag = tag >> 3
+switch tag {
+case 0: // v.Description.Moniker
 v.Description.Moniker = string(codonDecodeString(bz, &n, &err))
-if err != nil {return v, total, err}
+if err != nil {return}
 bz = bz[n:]
 total+=n
+case 1: // v.Description.Identity
 v.Description.Identity = string(codonDecodeString(bz, &n, &err))
-if err != nil {return v, total, err}
+if err != nil {return}
 bz = bz[n:]
 total+=n
+case 2: // v.Description.Website
 v.Description.Website = string(codonDecodeString(bz, &n, &err))
-if err != nil {return v, total, err}
+if err != nil {return}
 bz = bz[n:]
 total+=n
+case 3: // v.Description.Details
 v.Description.Details = string(codonDecodeString(bz, &n, &err))
-if err != nil {return v, total, err}
+if err != nil {return}
 bz = bz[n:]
 total+=n
-// end of v.Description
-length = codonDecodeInt(bz, &n, &err)
-if err != nil {return v, total, err}
+default: err = errors.New("Unknown Field")
+return
+}
+} // end for
+}(bz[:l]) // end func
+if err != nil {return}
+bz = bz[l:]
+n += int(l)
+case 1: // v.ValidatorAddress
+var tmpBz []byte
+n, err = codonGetByteSlice(&tmpBz, bz)
+if err != nil {return}
 bz = bz[n:]
 total+=n
-v.ValidatorAddress, n, err = codonGetByteSlice(bz, length)
-if err != nil {return v, total, err}
-bz = bz[n:]
-total+=n
+v.ValidatorAddress = tmpBz
+case 2: // v.CommissionRate
 v.CommissionRate = &SdkDec{}
 *(v.CommissionRate), n, err = DecodeDec(bz)
-if err != nil {return v, total, err}
+if err != nil {return}
 bz = bz[n:]
 total+=n
+case 3: // v.MinSelfDelegation
 v.MinSelfDelegation = &SdkInt{}
 *(v.MinSelfDelegation), n, err = DecodeInt(bz)
-if err != nil {return v, total, err}
+if err != nil {return}
 bz = bz[n:]
 total+=n
+default: err = errors.New("Unknown Field")
+return
+}
+} // end for
 return v, total, nil
 } //End of DecodeMsgEditValidator
 
@@ -3272,32 +3774,37 @@ return
 
 // Non-Interface
 func EncodeMsgSetWithdrawAddress(w *[]byte, v MsgSetWithdrawAddress) {
-codonEncodeByteSlice(w, v.DelegatorAddress[:])
-codonEncodeByteSlice(w, v.WithdrawAddress[:])
+codonEncodeByteSlice(0, w, v.DelegatorAddress[:])
+codonEncodeByteSlice(1, w, v.WithdrawAddress[:])
 } //End of EncodeMsgSetWithdrawAddress
 
-func DecodeMsgSetWithdrawAddress(bz []byte) (MsgSetWithdrawAddress, int, error) {
-var err error
-var length int
-var v MsgSetWithdrawAddress
+func DecodeMsgSetWithdrawAddress(bz []byte) (v MsgSetWithdrawAddress, total int, err error) {
 var n int
-var total int
-length = codonDecodeInt(bz, &n, &err)
+for len(bz) != 0 {
+tag := codonDecodeUint64(bz, &n, &err)
 if err != nil {return v, total, err}
 bz = bz[n:]
 total+=n
-v.DelegatorAddress, n, err = codonGetByteSlice(bz, length)
-if err != nil {return v, total, err}
+tag = tag >> 3
+switch tag {
+case 0: // v.DelegatorAddress
+var tmpBz []byte
+n, err = codonGetByteSlice(&tmpBz, bz)
+if err != nil {return}
 bz = bz[n:]
 total+=n
-length = codonDecodeInt(bz, &n, &err)
-if err != nil {return v, total, err}
+v.DelegatorAddress = tmpBz
+case 1: // v.WithdrawAddress
+var tmpBz []byte
+n, err = codonGetByteSlice(&tmpBz, bz)
+if err != nil {return}
 bz = bz[n:]
 total+=n
-v.WithdrawAddress, n, err = codonGetByteSlice(bz, length)
-if err != nil {return v, total, err}
-bz = bz[n:]
-total+=n
+v.WithdrawAddress = tmpBz
+default: err = errors.New("Unknown Field")
+return
+}
+} // end for
 return v, total, nil
 } //End of DecodeMsgSetWithdrawAddress
 
@@ -3330,44 +3837,75 @@ return
 
 // Non-Interface
 func EncodeMsgUndelegate(w *[]byte, v MsgUndelegate) {
-codonEncodeByteSlice(w, v.DelegatorAddress[:])
-codonEncodeByteSlice(w, v.ValidatorAddress[:])
-codonEncodeString(w, v.Amount.Denom)
-EncodeInt(w, v.Amount.Amount)
-// end of v.Amount
+codonEncodeByteSlice(0, w, v.DelegatorAddress[:])
+codonEncodeByteSlice(1, w, v.ValidatorAddress[:])
+codonEncodeByteSlice(2, w, func() []byte {
+wBuf := make([]byte, 0, 64)
+w := &wBuf
+codonEncodeString(0, w, v.Amount.Denom)
+codonEncodeByteSlice(1, w, EncodeInt(v.Amount.Amount))
+return wBuf
+}()) // end of v.Amount
 } //End of EncodeMsgUndelegate
 
-func DecodeMsgUndelegate(bz []byte) (MsgUndelegate, int, error) {
-var err error
-var length int
-var v MsgUndelegate
+func DecodeMsgUndelegate(bz []byte) (v MsgUndelegate, total int, err error) {
 var n int
-var total int
-length = codonDecodeInt(bz, &n, &err)
+for len(bz) != 0 {
+tag := codonDecodeUint64(bz, &n, &err)
 if err != nil {return v, total, err}
 bz = bz[n:]
 total+=n
-v.DelegatorAddress, n, err = codonGetByteSlice(bz, length)
-if err != nil {return v, total, err}
+tag = tag >> 3
+switch tag {
+case 0: // v.DelegatorAddress
+var tmpBz []byte
+n, err = codonGetByteSlice(&tmpBz, bz)
+if err != nil {return}
 bz = bz[n:]
 total+=n
-length = codonDecodeInt(bz, &n, &err)
-if err != nil {return v, total, err}
+v.DelegatorAddress = tmpBz
+case 1: // v.ValidatorAddress
+var tmpBz []byte
+n, err = codonGetByteSlice(&tmpBz, bz)
+if err != nil {return}
 bz = bz[n:]
 total+=n
-v.ValidatorAddress, n, err = codonGetByteSlice(bz, length)
-if err != nil {return v, total, err}
+v.ValidatorAddress = tmpBz
+case 2: // v.Amount
+l := codonDecodeUint64(bz, &n, &err)
+if err != nil {return}
 bz = bz[n:]
 total+=n
+func(bz []byte) {
+for len(bz) != 0 {
+tag := codonDecodeUint64(bz, &n, &err)
+if err != nil {return}
+bz = bz[n:]
+total+=n
+tag = tag >> 3
+switch tag {
+case 0: // v.Amount.Denom
 v.Amount.Denom = string(codonDecodeString(bz, &n, &err))
-if err != nil {return v, total, err}
+if err != nil {return}
 bz = bz[n:]
 total+=n
+case 1: // v.Amount.Amount
 v.Amount.Amount, n, err = DecodeInt(bz)
-if err != nil {return v, total, err}
+if err != nil {return}
 bz = bz[n:]
 total+=n
-// end of v.Amount
+default: err = errors.New("Unknown Field")
+return
+}
+} // end for
+}(bz[:l]) // end func
+if err != nil {return}
+bz = bz[l:]
+n += int(l)
+default: err = errors.New("Unknown Field")
+return
+}
+} // end for
 return v, total, nil
 } //End of DecodeMsgUndelegate
 
@@ -3406,23 +3944,29 @@ return
 
 // Non-Interface
 func EncodeMsgUnjail(w *[]byte, v MsgUnjail) {
-codonEncodeByteSlice(w, v.ValidatorAddr[:])
+codonEncodeByteSlice(0, w, v.ValidatorAddr[:])
 } //End of EncodeMsgUnjail
 
-func DecodeMsgUnjail(bz []byte) (MsgUnjail, int, error) {
-var err error
-var length int
-var v MsgUnjail
+func DecodeMsgUnjail(bz []byte) (v MsgUnjail, total int, err error) {
 var n int
-var total int
-length = codonDecodeInt(bz, &n, &err)
+for len(bz) != 0 {
+tag := codonDecodeUint64(bz, &n, &err)
 if err != nil {return v, total, err}
 bz = bz[n:]
 total+=n
-v.ValidatorAddr, n, err = codonGetByteSlice(bz, length)
-if err != nil {return v, total, err}
+tag = tag >> 3
+switch tag {
+case 0: // v.ValidatorAddr
+var tmpBz []byte
+n, err = codonGetByteSlice(&tmpBz, bz)
+if err != nil {return}
 bz = bz[n:]
 total+=n
+v.ValidatorAddr = tmpBz
+default: err = errors.New("Unknown Field")
+return
+}
+} // end for
 return v, total, nil
 } //End of DecodeMsgUnjail
 
@@ -3447,32 +3991,37 @@ return
 
 // Non-Interface
 func EncodeMsgWithdrawDelegatorReward(w *[]byte, v MsgWithdrawDelegatorReward) {
-codonEncodeByteSlice(w, v.DelegatorAddress[:])
-codonEncodeByteSlice(w, v.ValidatorAddress[:])
+codonEncodeByteSlice(0, w, v.DelegatorAddress[:])
+codonEncodeByteSlice(1, w, v.ValidatorAddress[:])
 } //End of EncodeMsgWithdrawDelegatorReward
 
-func DecodeMsgWithdrawDelegatorReward(bz []byte) (MsgWithdrawDelegatorReward, int, error) {
-var err error
-var length int
-var v MsgWithdrawDelegatorReward
+func DecodeMsgWithdrawDelegatorReward(bz []byte) (v MsgWithdrawDelegatorReward, total int, err error) {
 var n int
-var total int
-length = codonDecodeInt(bz, &n, &err)
+for len(bz) != 0 {
+tag := codonDecodeUint64(bz, &n, &err)
 if err != nil {return v, total, err}
 bz = bz[n:]
 total+=n
-v.DelegatorAddress, n, err = codonGetByteSlice(bz, length)
-if err != nil {return v, total, err}
+tag = tag >> 3
+switch tag {
+case 0: // v.DelegatorAddress
+var tmpBz []byte
+n, err = codonGetByteSlice(&tmpBz, bz)
+if err != nil {return}
 bz = bz[n:]
 total+=n
-length = codonDecodeInt(bz, &n, &err)
-if err != nil {return v, total, err}
+v.DelegatorAddress = tmpBz
+case 1: // v.ValidatorAddress
+var tmpBz []byte
+n, err = codonGetByteSlice(&tmpBz, bz)
+if err != nil {return}
 bz = bz[n:]
 total+=n
-v.ValidatorAddress, n, err = codonGetByteSlice(bz, length)
-if err != nil {return v, total, err}
-bz = bz[n:]
-total+=n
+v.ValidatorAddress = tmpBz
+default: err = errors.New("Unknown Field")
+return
+}
+} // end for
 return v, total, nil
 } //End of DecodeMsgWithdrawDelegatorReward
 
@@ -3505,23 +4054,29 @@ return
 
 // Non-Interface
 func EncodeMsgWithdrawValidatorCommission(w *[]byte, v MsgWithdrawValidatorCommission) {
-codonEncodeByteSlice(w, v.ValidatorAddress[:])
+codonEncodeByteSlice(0, w, v.ValidatorAddress[:])
 } //End of EncodeMsgWithdrawValidatorCommission
 
-func DecodeMsgWithdrawValidatorCommission(bz []byte) (MsgWithdrawValidatorCommission, int, error) {
-var err error
-var length int
-var v MsgWithdrawValidatorCommission
+func DecodeMsgWithdrawValidatorCommission(bz []byte) (v MsgWithdrawValidatorCommission, total int, err error) {
 var n int
-var total int
-length = codonDecodeInt(bz, &n, &err)
+for len(bz) != 0 {
+tag := codonDecodeUint64(bz, &n, &err)
 if err != nil {return v, total, err}
 bz = bz[n:]
 total+=n
-v.ValidatorAddress, n, err = codonGetByteSlice(bz, length)
-if err != nil {return v, total, err}
+tag = tag >> 3
+switch tag {
+case 0: // v.ValidatorAddress
+var tmpBz []byte
+n, err = codonGetByteSlice(&tmpBz, bz)
+if err != nil {return}
 bz = bz[n:]
 total+=n
+v.ValidatorAddress = tmpBz
+default: err = errors.New("Unknown Field")
+return
+}
+} // end for
 return v, total, nil
 } //End of DecodeMsgWithdrawValidatorCommission
 
@@ -3546,48 +4101,51 @@ return
 
 // Non-Interface
 func EncodeMsgDeposit(w *[]byte, v MsgDeposit) {
-codonEncodeUvarint(w, uint64(v.ProposalID))
-codonEncodeByteSlice(w, v.Depositor[:])
-codonEncodeVarint(w, int64(len(v.Amount)))
+codonEncodeUvarint(0, w, uint64(v.ProposalID))
+codonEncodeByteSlice(1, w, v.Depositor[:])
 for _0:=0; _0<len(v.Amount); _0++ {
-codonEncodeString(w, v.Amount[_0].Denom)
-EncodeInt(w, v.Amount[_0].Amount)
-// end of v.Amount[_0]
+codonEncodeByteSlice(2, w, func() []byte {
+wBuf := make([]byte, 0, 64)
+w := &wBuf
+codonEncodeString(0, w, v.Amount[_0].Denom)
+codonEncodeByteSlice(1, w, EncodeInt(v.Amount[_0].Amount))
+return wBuf
+}()) // end of v.Amount[_0]
 }
 } //End of EncodeMsgDeposit
 
-func DecodeMsgDeposit(bz []byte) (MsgDeposit, int, error) {
-var err error
-var length int
-var v MsgDeposit
+func DecodeMsgDeposit(bz []byte) (v MsgDeposit, total int, err error) {
 var n int
-var total int
+for len(bz) != 0 {
+tag := codonDecodeUint64(bz, &n, &err)
+if err != nil {return v, total, err}
+bz = bz[n:]
+total+=n
+tag = tag >> 3
+switch tag {
+case 0: // v.ProposalID
 v.ProposalID = uint64(codonDecodeUint64(bz, &n, &err))
-if err != nil {return v, total, err}
+if err != nil {return}
 bz = bz[n:]
 total+=n
-length = codonDecodeInt(bz, &n, &err)
-if err != nil {return v, total, err}
+case 1: // v.Depositor
+var tmpBz []byte
+n, err = codonGetByteSlice(&tmpBz, bz)
+if err != nil {return}
 bz = bz[n:]
 total+=n
-v.Depositor, n, err = codonGetByteSlice(bz, length)
-if err != nil {return v, total, err}
+v.Depositor = tmpBz
+case 2: // v.Amount
+var tmp Coin
+tmp, n, err = DecodeCoin(bz)
+if err != nil {return}
 bz = bz[n:]
 total+=n
-length = codonDecodeInt(bz, &n, &err)
-if err != nil {return v, total, err}
-bz = bz[n:]
-total+=n
-if length==0 {v.Amount = nil
-} else {
-v.Amount = make([]Coin, length)
+v.Amount = append(v.Amount, tmp)
+default: err = errors.New("Unknown Field")
+return
 }
-for _0, length_0 := 0, length; _0<length_0; _0++ { //slice of struct
-v.Amount[_0], n, err = DecodeCoin(bz)
-if err != nil {return v, total, err}
-bz = bz[n:]
-total+=n
-}
+} // end for
 return v, total, nil
 } //End of DecodeMsgDeposit
 
@@ -3630,33 +4188,41 @@ return
 
 // Non-Interface
 func EncodeMsgVote(w *[]byte, v MsgVote) {
-codonEncodeUvarint(w, uint64(v.ProposalID))
-codonEncodeByteSlice(w, v.Voter[:])
-codonEncodeUint8(w, uint8(v.Option))
+codonEncodeUvarint(0, w, uint64(v.ProposalID))
+codonEncodeByteSlice(1, w, v.Voter[:])
+codonEncodeUint8(2, w, uint8(v.Option))
 } //End of EncodeMsgVote
 
-func DecodeMsgVote(bz []byte) (MsgVote, int, error) {
-var err error
-var length int
-var v MsgVote
+func DecodeMsgVote(bz []byte) (v MsgVote, total int, err error) {
 var n int
-var total int
+for len(bz) != 0 {
+tag := codonDecodeUint64(bz, &n, &err)
+if err != nil {return v, total, err}
+bz = bz[n:]
+total+=n
+tag = tag >> 3
+switch tag {
+case 0: // v.ProposalID
 v.ProposalID = uint64(codonDecodeUint64(bz, &n, &err))
-if err != nil {return v, total, err}
+if err != nil {return}
 bz = bz[n:]
 total+=n
-length = codonDecodeInt(bz, &n, &err)
-if err != nil {return v, total, err}
+case 1: // v.Voter
+var tmpBz []byte
+n, err = codonGetByteSlice(&tmpBz, bz)
+if err != nil {return}
 bz = bz[n:]
 total+=n
-v.Voter, n, err = codonGetByteSlice(bz, length)
-if err != nil {return v, total, err}
-bz = bz[n:]
-total+=n
+v.Voter = tmpBz
+case 2: // v.Option
 v.Option = VoteOption(codonDecodeUint8(bz, &n, &err))
-if err != nil {return v, total, err}
+if err != nil {return}
 bz = bz[n:]
 total+=n
+default: err = errors.New("Unknown Field")
+return
+}
+} // end for
 return v, total, nil
 } //End of DecodeMsgVote
 
@@ -3685,46 +4251,51 @@ return
 
 // Non-Interface
 func EncodeParameterChangeProposal(w *[]byte, v ParameterChangeProposal) {
-codonEncodeString(w, v.Title)
-codonEncodeString(w, v.Description)
-codonEncodeVarint(w, int64(len(v.Changes)))
+codonEncodeString(0, w, v.Title)
+codonEncodeString(1, w, v.Description)
 for _0:=0; _0<len(v.Changes); _0++ {
-codonEncodeString(w, v.Changes[_0].Subspace)
-codonEncodeString(w, v.Changes[_0].Key)
-codonEncodeString(w, v.Changes[_0].Subkey)
-codonEncodeString(w, v.Changes[_0].Value)
-// end of v.Changes[_0]
+codonEncodeByteSlice(2, w, func() []byte {
+wBuf := make([]byte, 0, 64)
+w := &wBuf
+codonEncodeString(0, w, v.Changes[_0].Subspace)
+codonEncodeString(1, w, v.Changes[_0].Key)
+codonEncodeString(2, w, v.Changes[_0].Subkey)
+codonEncodeString(3, w, v.Changes[_0].Value)
+return wBuf
+}()) // end of v.Changes[_0]
 }
 } //End of EncodeParameterChangeProposal
 
-func DecodeParameterChangeProposal(bz []byte) (ParameterChangeProposal, int, error) {
-var err error
-var length int
-var v ParameterChangeProposal
+func DecodeParameterChangeProposal(bz []byte) (v ParameterChangeProposal, total int, err error) {
 var n int
-var total int
+for len(bz) != 0 {
+tag := codonDecodeUint64(bz, &n, &err)
+if err != nil {return v, total, err}
+bz = bz[n:]
+total+=n
+tag = tag >> 3
+switch tag {
+case 0: // v.Title
 v.Title = string(codonDecodeString(bz, &n, &err))
-if err != nil {return v, total, err}
+if err != nil {return}
 bz = bz[n:]
 total+=n
+case 1: // v.Description
 v.Description = string(codonDecodeString(bz, &n, &err))
-if err != nil {return v, total, err}
+if err != nil {return}
 bz = bz[n:]
 total+=n
-length = codonDecodeInt(bz, &n, &err)
-if err != nil {return v, total, err}
+case 2: // v.Changes
+var tmp ParamChange
+tmp, n, err = DecodeParamChange(bz)
+if err != nil {return}
 bz = bz[n:]
 total+=n
-if length==0 {v.Changes = nil
-} else {
-v.Changes = make([]ParamChange, length)
+v.Changes = append(v.Changes, tmp)
+default: err = errors.New("Unknown Field")
+return
 }
-for _0, length_0 := 0, length; _0<length_0; _0++ { //slice of struct
-v.Changes[_0], n, err = DecodeParamChange(bz)
-if err != nil {return v, total, err}
-bz = bz[n:]
-total+=n
-}
+} // end for
 return v, total, nil
 } //End of DecodeParameterChangeProposal
 
@@ -3761,23 +4332,33 @@ return
 
 // Non-Interface
 func EncodeSoftwareUpgradeProposal(w *[]byte, v SoftwareUpgradeProposal) {
-codonEncodeString(w, v.Title)
-codonEncodeString(w, v.Description)
+codonEncodeString(0, w, v.Title)
+codonEncodeString(1, w, v.Description)
 } //End of EncodeSoftwareUpgradeProposal
 
-func DecodeSoftwareUpgradeProposal(bz []byte) (SoftwareUpgradeProposal, int, error) {
-var err error
-var v SoftwareUpgradeProposal
+func DecodeSoftwareUpgradeProposal(bz []byte) (v SoftwareUpgradeProposal, total int, err error) {
 var n int
-var total int
+for len(bz) != 0 {
+tag := codonDecodeUint64(bz, &n, &err)
+if err != nil {return v, total, err}
+bz = bz[n:]
+total+=n
+tag = tag >> 3
+switch tag {
+case 0: // v.Title
 v.Title = string(codonDecodeString(bz, &n, &err))
-if err != nil {return v, total, err}
+if err != nil {return}
 bz = bz[n:]
 total+=n
+case 1: // v.Description
 v.Description = string(codonDecodeString(bz, &n, &err))
-if err != nil {return v, total, err}
+if err != nil {return}
 bz = bz[n:]
 total+=n
+default: err = errors.New("Unknown Field")
+return
+}
+} // end for
 return v, total, nil
 } //End of DecodeSoftwareUpgradeProposal
 
@@ -3796,23 +4377,33 @@ return
 
 // Non-Interface
 func EncodeTextProposal(w *[]byte, v TextProposal) {
-codonEncodeString(w, v.Title)
-codonEncodeString(w, v.Description)
+codonEncodeString(0, w, v.Title)
+codonEncodeString(1, w, v.Description)
 } //End of EncodeTextProposal
 
-func DecodeTextProposal(bz []byte) (TextProposal, int, error) {
-var err error
-var v TextProposal
+func DecodeTextProposal(bz []byte) (v TextProposal, total int, err error) {
 var n int
-var total int
+for len(bz) != 0 {
+tag := codonDecodeUint64(bz, &n, &err)
+if err != nil {return v, total, err}
+bz = bz[n:]
+total+=n
+tag = tag >> 3
+switch tag {
+case 0: // v.Title
 v.Title = string(codonDecodeString(bz, &n, &err))
-if err != nil {return v, total, err}
+if err != nil {return}
 bz = bz[n:]
 total+=n
+case 1: // v.Description
 v.Description = string(codonDecodeString(bz, &n, &err))
-if err != nil {return v, total, err}
+if err != nil {return}
 bz = bz[n:]
 total+=n
+default: err = errors.New("Unknown Field")
+return
+}
+} // end for
 return v, total, nil
 } //End of DecodeTextProposal
 
@@ -3831,53 +4422,57 @@ return
 
 // Non-Interface
 func EncodeCommunityPoolSpendProposal(w *[]byte, v CommunityPoolSpendProposal) {
-codonEncodeString(w, v.Title)
-codonEncodeString(w, v.Description)
-codonEncodeByteSlice(w, v.Recipient[:])
-codonEncodeVarint(w, int64(len(v.Amount)))
+codonEncodeString(0, w, v.Title)
+codonEncodeString(1, w, v.Description)
+codonEncodeByteSlice(2, w, v.Recipient[:])
 for _0:=0; _0<len(v.Amount); _0++ {
-codonEncodeString(w, v.Amount[_0].Denom)
-EncodeInt(w, v.Amount[_0].Amount)
-// end of v.Amount[_0]
+codonEncodeByteSlice(3, w, func() []byte {
+wBuf := make([]byte, 0, 64)
+w := &wBuf
+codonEncodeString(0, w, v.Amount[_0].Denom)
+codonEncodeByteSlice(1, w, EncodeInt(v.Amount[_0].Amount))
+return wBuf
+}()) // end of v.Amount[_0]
 }
 } //End of EncodeCommunityPoolSpendProposal
 
-func DecodeCommunityPoolSpendProposal(bz []byte) (CommunityPoolSpendProposal, int, error) {
-var err error
-var length int
-var v CommunityPoolSpendProposal
+func DecodeCommunityPoolSpendProposal(bz []byte) (v CommunityPoolSpendProposal, total int, err error) {
 var n int
-var total int
+for len(bz) != 0 {
+tag := codonDecodeUint64(bz, &n, &err)
+if err != nil {return v, total, err}
+bz = bz[n:]
+total+=n
+tag = tag >> 3
+switch tag {
+case 0: // v.Title
 v.Title = string(codonDecodeString(bz, &n, &err))
-if err != nil {return v, total, err}
+if err != nil {return}
 bz = bz[n:]
 total+=n
+case 1: // v.Description
 v.Description = string(codonDecodeString(bz, &n, &err))
-if err != nil {return v, total, err}
+if err != nil {return}
 bz = bz[n:]
 total+=n
-length = codonDecodeInt(bz, &n, &err)
-if err != nil {return v, total, err}
+case 2: // v.Recipient
+var tmpBz []byte
+n, err = codonGetByteSlice(&tmpBz, bz)
+if err != nil {return}
 bz = bz[n:]
 total+=n
-v.Recipient, n, err = codonGetByteSlice(bz, length)
-if err != nil {return v, total, err}
+v.Recipient = tmpBz
+case 3: // v.Amount
+var tmp Coin
+tmp, n, err = DecodeCoin(bz)
+if err != nil {return}
 bz = bz[n:]
 total+=n
-length = codonDecodeInt(bz, &n, &err)
-if err != nil {return v, total, err}
-bz = bz[n:]
-total+=n
-if length==0 {v.Amount = nil
-} else {
-v.Amount = make([]Coin, length)
+v.Amount = append(v.Amount, tmp)
+default: err = errors.New("Unknown Field")
+return
 }
-for _0, length_0 := 0, length; _0<length_0; _0++ { //slice of struct
-v.Amount[_0], n, err = DecodeCoin(bz)
-if err != nil {return v, total, err}
-bz = bz[n:]
-total+=n
-}
+} // end for
 return v, total, nil
 } //End of DecodeCommunityPoolSpendProposal
 
@@ -3922,64 +4517,69 @@ return
 
 // Non-Interface
 func EncodeMsgMultiSend(w *[]byte, v MsgMultiSend) {
-codonEncodeVarint(w, int64(len(v.Inputs)))
 for _0:=0; _0<len(v.Inputs); _0++ {
-codonEncodeByteSlice(w, v.Inputs[_0].Address[:])
-codonEncodeVarint(w, int64(len(v.Inputs[_0].Coins)))
+codonEncodeByteSlice(0, w, func() []byte {
+wBuf := make([]byte, 0, 64)
+w := &wBuf
+codonEncodeByteSlice(0, w, v.Inputs[_0].Address[:])
 for _1:=0; _1<len(v.Inputs[_0].Coins); _1++ {
-codonEncodeString(w, v.Inputs[_0].Coins[_1].Denom)
-EncodeInt(w, v.Inputs[_0].Coins[_1].Amount)
-// end of v.Inputs[_0].Coins[_1]
+codonEncodeByteSlice(1, w, func() []byte {
+wBuf := make([]byte, 0, 64)
+w := &wBuf
+codonEncodeString(0, w, v.Inputs[_0].Coins[_1].Denom)
+codonEncodeByteSlice(1, w, EncodeInt(v.Inputs[_0].Coins[_1].Amount))
+return wBuf
+}()) // end of v.Inputs[_0].Coins[_1]
 }
-// end of v.Inputs[_0]
+return wBuf
+}()) // end of v.Inputs[_0]
 }
-codonEncodeVarint(w, int64(len(v.Outputs)))
 for _0:=0; _0<len(v.Outputs); _0++ {
-codonEncodeByteSlice(w, v.Outputs[_0].Address[:])
-codonEncodeVarint(w, int64(len(v.Outputs[_0].Coins)))
+codonEncodeByteSlice(1, w, func() []byte {
+wBuf := make([]byte, 0, 64)
+w := &wBuf
+codonEncodeByteSlice(0, w, v.Outputs[_0].Address[:])
 for _1:=0; _1<len(v.Outputs[_0].Coins); _1++ {
-codonEncodeString(w, v.Outputs[_0].Coins[_1].Denom)
-EncodeInt(w, v.Outputs[_0].Coins[_1].Amount)
-// end of v.Outputs[_0].Coins[_1]
+codonEncodeByteSlice(1, w, func() []byte {
+wBuf := make([]byte, 0, 64)
+w := &wBuf
+codonEncodeString(0, w, v.Outputs[_0].Coins[_1].Denom)
+codonEncodeByteSlice(1, w, EncodeInt(v.Outputs[_0].Coins[_1].Amount))
+return wBuf
+}()) // end of v.Outputs[_0].Coins[_1]
 }
-// end of v.Outputs[_0]
+return wBuf
+}()) // end of v.Outputs[_0]
 }
 } //End of EncodeMsgMultiSend
 
-func DecodeMsgMultiSend(bz []byte) (MsgMultiSend, int, error) {
-var err error
-var length int
-var v MsgMultiSend
+func DecodeMsgMultiSend(bz []byte) (v MsgMultiSend, total int, err error) {
 var n int
-var total int
-length = codonDecodeInt(bz, &n, &err)
+for len(bz) != 0 {
+tag := codonDecodeUint64(bz, &n, &err)
 if err != nil {return v, total, err}
 bz = bz[n:]
 total+=n
-if length==0 {v.Inputs = nil
-} else {
-v.Inputs = make([]Input, length)
-}
-for _0, length_0 := 0, length; _0<length_0; _0++ { //slice of struct
-v.Inputs[_0], n, err = DecodeInput(bz)
-if err != nil {return v, total, err}
+tag = tag >> 3
+switch tag {
+case 0: // v.Inputs
+var tmp Input
+tmp, n, err = DecodeInput(bz)
+if err != nil {return}
 bz = bz[n:]
 total+=n
-}
-length = codonDecodeInt(bz, &n, &err)
-if err != nil {return v, total, err}
+v.Inputs = append(v.Inputs, tmp)
+case 1: // v.Outputs
+var tmp Output
+tmp, n, err = DecodeOutput(bz)
+if err != nil {return}
 bz = bz[n:]
 total+=n
-if length==0 {v.Outputs = nil
-} else {
-v.Outputs = make([]Output, length)
+v.Outputs = append(v.Outputs, tmp)
+default: err = errors.New("Unknown Field")
+return
 }
-for _0, length_0 := 0, length; _0<length_0; _0++ { //slice of struct
-v.Outputs[_0], n, err = DecodeOutput(bz)
-if err != nil {return v, total, err}
-bz = bz[n:]
-total+=n
-}
+} // end for
 return v, total, nil
 } //End of DecodeMsgMultiSend
 
@@ -4028,34 +4628,37 @@ return
 
 // Non-Interface
 func EncodeFeePool(w *[]byte, v FeePool) {
-codonEncodeVarint(w, int64(len(v.CommunityPool)))
 for _0:=0; _0<len(v.CommunityPool); _0++ {
-codonEncodeString(w, v.CommunityPool[_0].Denom)
-EncodeDec(w, v.CommunityPool[_0].Amount)
-// end of v.CommunityPool[_0]
+codonEncodeByteSlice(0, w, func() []byte {
+wBuf := make([]byte, 0, 64)
+w := &wBuf
+codonEncodeString(0, w, v.CommunityPool[_0].Denom)
+codonEncodeByteSlice(1, w, EncodeDec(v.CommunityPool[_0].Amount))
+return wBuf
+}()) // end of v.CommunityPool[_0]
 }
 } //End of EncodeFeePool
 
-func DecodeFeePool(bz []byte) (FeePool, int, error) {
-var err error
-var length int
-var v FeePool
+func DecodeFeePool(bz []byte) (v FeePool, total int, err error) {
 var n int
-var total int
-length = codonDecodeInt(bz, &n, &err)
+for len(bz) != 0 {
+tag := codonDecodeUint64(bz, &n, &err)
 if err != nil {return v, total, err}
 bz = bz[n:]
 total+=n
-if length==0 {v.CommunityPool = nil
-} else {
-v.CommunityPool = make([]DecCoin, length)
-}
-for _0, length_0 := 0, length; _0<length_0; _0++ { //slice of struct
-v.CommunityPool[_0], n, err = DecodeDecCoin(bz)
-if err != nil {return v, total, err}
+tag = tag >> 3
+switch tag {
+case 0: // v.CommunityPool
+var tmp DecCoin
+tmp, n, err = DecodeDecCoin(bz)
+if err != nil {return}
 bz = bz[n:]
 total+=n
+v.CommunityPool = append(v.CommunityPool, tmp)
+default: err = errors.New("Unknown Field")
+return
 }
+} // end for
 return v, total, nil
 } //End of DecodeFeePool
 
@@ -4088,52 +4691,53 @@ return
 
 // Non-Interface
 func EncodeMsgSend(w *[]byte, v MsgSend) {
-codonEncodeByteSlice(w, v.FromAddress[:])
-codonEncodeByteSlice(w, v.ToAddress[:])
-codonEncodeVarint(w, int64(len(v.Amount)))
+codonEncodeByteSlice(0, w, v.FromAddress[:])
+codonEncodeByteSlice(1, w, v.ToAddress[:])
 for _0:=0; _0<len(v.Amount); _0++ {
-codonEncodeString(w, v.Amount[_0].Denom)
-EncodeInt(w, v.Amount[_0].Amount)
-// end of v.Amount[_0]
+codonEncodeByteSlice(2, w, func() []byte {
+wBuf := make([]byte, 0, 64)
+w := &wBuf
+codonEncodeString(0, w, v.Amount[_0].Denom)
+codonEncodeByteSlice(1, w, EncodeInt(v.Amount[_0].Amount))
+return wBuf
+}()) // end of v.Amount[_0]
 }
 } //End of EncodeMsgSend
 
-func DecodeMsgSend(bz []byte) (MsgSend, int, error) {
-var err error
-var length int
-var v MsgSend
+func DecodeMsgSend(bz []byte) (v MsgSend, total int, err error) {
 var n int
-var total int
-length = codonDecodeInt(bz, &n, &err)
+for len(bz) != 0 {
+tag := codonDecodeUint64(bz, &n, &err)
 if err != nil {return v, total, err}
 bz = bz[n:]
 total+=n
-v.FromAddress, n, err = codonGetByteSlice(bz, length)
-if err != nil {return v, total, err}
+tag = tag >> 3
+switch tag {
+case 0: // v.FromAddress
+var tmpBz []byte
+n, err = codonGetByteSlice(&tmpBz, bz)
+if err != nil {return}
 bz = bz[n:]
 total+=n
-length = codonDecodeInt(bz, &n, &err)
-if err != nil {return v, total, err}
+v.FromAddress = tmpBz
+case 1: // v.ToAddress
+var tmpBz []byte
+n, err = codonGetByteSlice(&tmpBz, bz)
+if err != nil {return}
 bz = bz[n:]
 total+=n
-v.ToAddress, n, err = codonGetByteSlice(bz, length)
-if err != nil {return v, total, err}
+v.ToAddress = tmpBz
+case 2: // v.Amount
+var tmp Coin
+tmp, n, err = DecodeCoin(bz)
+if err != nil {return}
 bz = bz[n:]
 total+=n
-length = codonDecodeInt(bz, &n, &err)
-if err != nil {return v, total, err}
-bz = bz[n:]
-total+=n
-if length==0 {v.Amount = nil
-} else {
-v.Amount = make([]Coin, length)
+v.Amount = append(v.Amount, tmp)
+default: err = errors.New("Unknown Field")
+return
 }
-for _0, length_0 := 0, length; _0<length_0; _0++ { //slice of struct
-v.Amount[_0], n, err = DecodeCoin(bz)
-if err != nil {return v, total, err}
-bz = bz[n:]
-total+=n
-}
+} // end for
 return v, total, nil
 } //End of DecodeMsgSend
 
@@ -4182,33 +4786,41 @@ return
 
 // Non-Interface
 func EncodeMsgVerifyInvariant(w *[]byte, v MsgVerifyInvariant) {
-codonEncodeByteSlice(w, v.Sender[:])
-codonEncodeString(w, v.InvariantModuleName)
-codonEncodeString(w, v.InvariantRoute)
+codonEncodeByteSlice(0, w, v.Sender[:])
+codonEncodeString(1, w, v.InvariantModuleName)
+codonEncodeString(2, w, v.InvariantRoute)
 } //End of EncodeMsgVerifyInvariant
 
-func DecodeMsgVerifyInvariant(bz []byte) (MsgVerifyInvariant, int, error) {
-var err error
-var length int
-var v MsgVerifyInvariant
+func DecodeMsgVerifyInvariant(bz []byte) (v MsgVerifyInvariant, total int, err error) {
 var n int
-var total int
-length = codonDecodeInt(bz, &n, &err)
+for len(bz) != 0 {
+tag := codonDecodeUint64(bz, &n, &err)
 if err != nil {return v, total, err}
 bz = bz[n:]
 total+=n
-v.Sender, n, err = codonGetByteSlice(bz, length)
-if err != nil {return v, total, err}
+tag = tag >> 3
+switch tag {
+case 0: // v.Sender
+var tmpBz []byte
+n, err = codonGetByteSlice(&tmpBz, bz)
+if err != nil {return}
 bz = bz[n:]
 total+=n
+v.Sender = tmpBz
+case 1: // v.InvariantModuleName
 v.InvariantModuleName = string(codonDecodeString(bz, &n, &err))
-if err != nil {return v, total, err}
+if err != nil {return}
 bz = bz[n:]
 total+=n
+case 2: // v.InvariantRoute
 v.InvariantRoute = string(codonDecodeString(bz, &n, &err))
-if err != nil {return v, total, err}
+if err != nil {return}
 bz = bz[n:]
 total+=n
+default: err = errors.New("Unknown Field")
+return
+}
+} // end for
 return v, total, nil
 } //End of DecodeMsgVerifyInvariant
 
@@ -4237,34 +4849,37 @@ return
 
 // Non-Interface
 func EncodeSupply(w *[]byte, v Supply) {
-codonEncodeVarint(w, int64(len(v.Total)))
 for _0:=0; _0<len(v.Total); _0++ {
-codonEncodeString(w, v.Total[_0].Denom)
-EncodeInt(w, v.Total[_0].Amount)
-// end of v.Total[_0]
+codonEncodeByteSlice(0, w, func() []byte {
+wBuf := make([]byte, 0, 64)
+w := &wBuf
+codonEncodeString(0, w, v.Total[_0].Denom)
+codonEncodeByteSlice(1, w, EncodeInt(v.Total[_0].Amount))
+return wBuf
+}()) // end of v.Total[_0]
 }
 } //End of EncodeSupply
 
-func DecodeSupply(bz []byte) (Supply, int, error) {
-var err error
-var length int
-var v Supply
+func DecodeSupply(bz []byte) (v Supply, total int, err error) {
 var n int
-var total int
-length = codonDecodeInt(bz, &n, &err)
+for len(bz) != 0 {
+tag := codonDecodeUint64(bz, &n, &err)
 if err != nil {return v, total, err}
 bz = bz[n:]
 total+=n
-if length==0 {v.Total = nil
-} else {
-v.Total = make([]Coin, length)
-}
-for _0, length_0 := 0, length; _0<length_0; _0++ { //slice of struct
-v.Total[_0], n, err = DecodeCoin(bz)
-if err != nil {return v, total, err}
+tag = tag >> 3
+switch tag {
+case 0: // v.Total
+var tmp Coin
+tmp, n, err = DecodeCoin(bz)
+if err != nil {return}
 bz = bz[n:]
 total+=n
+v.Total = append(v.Total, tmp)
+default: err = errors.New("Unknown Field")
+return
 }
+} // end for
 return v, total, nil
 } //End of DecodeSupply
 
@@ -4297,36 +4912,33 @@ return
 
 // Non-Interface
 func EncodeAccAddressList(w *[]byte, v AccAddressList) {
-codonEncodeVarint(w, int64(len(v)))
 for _0:=0; _0<len(v); _0++ {
-codonEncodeByteSlice(w, v[_0][:])
+codonEncodeByteSlice(0, w, v[_0][:])
 }
 } //End of EncodeAccAddressList
 
-func DecodeAccAddressList(bz []byte) (AccAddressList, int, error) {
-var err error
-var length int
-var v AccAddressList
+func DecodeAccAddressList(bz []byte) (v AccAddressList, total int, err error) {
 var n int
-var total int
-length = codonDecodeInt(bz, &n, &err)
+for len(bz) != 0 {
+tag := codonDecodeUint64(bz, &n, &err)
 if err != nil {return v, total, err}
 bz = bz[n:]
 total+=n
-if length==0 {v = nil
-} else {
-v = make([]AccAddress, length)
+tag = tag >> 3
+switch tag {
+case 0:
+var tmp AccAddress
+var tmpBz []byte
+n, err = codonGetByteSlice(&tmpBz, bz)
+if err != nil {return}
+bz = bz[n:]
+total+=n
+tmp = tmpBz
+v = append(v, tmp)
+default: err = errors.New("Unknown Field")
+return
 }
-for _0, length_0 := 0, length; _0<length_0; _0++ { //slice of slice
-length = codonDecodeInt(bz, &n, &err)
-if err != nil {return v, total, err}
-bz = bz[n:]
-total+=n
-v[_0], n, err = codonGetByteSlice(bz, length)
-if err != nil {return v, total, err}
-bz = bz[n:]
-total+=n
-}
+} // end for
 return v, total, nil
 } //End of DecodeAccAddressList
 
@@ -4365,42 +4977,54 @@ return
 
 // Non-Interface
 func EncodeCommitInfo(w *[]byte, v CommitInfo) {
-codonEncodeVarint(w, int64(v.Version))
-codonEncodeVarint(w, int64(len(v.StoreInfos)))
+codonEncodeVarint(0, w, int64(v.Version))
 for _0:=0; _0<len(v.StoreInfos); _0++ {
-codonEncodeString(w, v.StoreInfos[_0].Name)
-codonEncodeVarint(w, int64(v.StoreInfos[_0].Core.CommitID.Version))
-codonEncodeByteSlice(w, v.StoreInfos[_0].Core.CommitID.Hash[:])
-// end of v.StoreInfos[_0].Core.CommitID
-// end of v.StoreInfos[_0].Core
-// end of v.StoreInfos[_0]
+codonEncodeByteSlice(1, w, func() []byte {
+wBuf := make([]byte, 0, 64)
+w := &wBuf
+codonEncodeString(0, w, v.StoreInfos[_0].Name)
+codonEncodeByteSlice(1, w, func() []byte {
+wBuf := make([]byte, 0, 64)
+w := &wBuf
+codonEncodeByteSlice(0, w, func() []byte {
+wBuf := make([]byte, 0, 64)
+w := &wBuf
+codonEncodeVarint(0, w, int64(v.StoreInfos[_0].Core.CommitID.Version))
+codonEncodeByteSlice(1, w, v.StoreInfos[_0].Core.CommitID.Hash[:])
+return wBuf
+}()) // end of v.StoreInfos[_0].Core.CommitID
+return wBuf
+}()) // end of v.StoreInfos[_0].Core
+return wBuf
+}()) // end of v.StoreInfos[_0]
 }
 } //End of EncodeCommitInfo
 
-func DecodeCommitInfo(bz []byte) (CommitInfo, int, error) {
-var err error
-var length int
-var v CommitInfo
+func DecodeCommitInfo(bz []byte) (v CommitInfo, total int, err error) {
 var n int
-var total int
+for len(bz) != 0 {
+tag := codonDecodeUint64(bz, &n, &err)
+if err != nil {return v, total, err}
+bz = bz[n:]
+total+=n
+tag = tag >> 3
+switch tag {
+case 0: // v.Version
 v.Version = int64(codonDecodeInt64(bz, &n, &err))
-if err != nil {return v, total, err}
+if err != nil {return}
 bz = bz[n:]
 total+=n
-length = codonDecodeInt(bz, &n, &err)
-if err != nil {return v, total, err}
+case 1: // v.StoreInfos
+var tmp StoreInfo
+tmp, n, err = DecodeStoreInfo(bz)
+if err != nil {return}
 bz = bz[n:]
 total+=n
-if length==0 {v.StoreInfos = nil
-} else {
-v.StoreInfos = make([]StoreInfo, length)
+v.StoreInfos = append(v.StoreInfos, tmp)
+default: err = errors.New("Unknown Field")
+return
 }
-for _0, length_0 := 0, length; _0<length_0; _0++ { //slice of struct
-v.StoreInfos[_0], n, err = DecodeStoreInfo(bz)
-if err != nil {return v, total, err}
-bz = bz[n:]
-total+=n
-}
+} // end for
 return v, total, nil
 } //End of DecodeCommitInfo
 
@@ -4435,37 +5059,93 @@ return
 
 // Non-Interface
 func EncodeStoreInfo(w *[]byte, v StoreInfo) {
-codonEncodeString(w, v.Name)
-codonEncodeVarint(w, int64(v.Core.CommitID.Version))
-codonEncodeByteSlice(w, v.Core.CommitID.Hash[:])
-// end of v.Core.CommitID
-// end of v.Core
+codonEncodeString(0, w, v.Name)
+codonEncodeByteSlice(1, w, func() []byte {
+wBuf := make([]byte, 0, 64)
+w := &wBuf
+codonEncodeByteSlice(0, w, func() []byte {
+wBuf := make([]byte, 0, 64)
+w := &wBuf
+codonEncodeVarint(0, w, int64(v.Core.CommitID.Version))
+codonEncodeByteSlice(1, w, v.Core.CommitID.Hash[:])
+return wBuf
+}()) // end of v.Core.CommitID
+return wBuf
+}()) // end of v.Core
 } //End of EncodeStoreInfo
 
-func DecodeStoreInfo(bz []byte) (StoreInfo, int, error) {
-var err error
-var length int
-var v StoreInfo
+func DecodeStoreInfo(bz []byte) (v StoreInfo, total int, err error) {
 var n int
-var total int
+for len(bz) != 0 {
+tag := codonDecodeUint64(bz, &n, &err)
+if err != nil {return v, total, err}
+bz = bz[n:]
+total+=n
+tag = tag >> 3
+switch tag {
+case 0: // v.Name
 v.Name = string(codonDecodeString(bz, &n, &err))
-if err != nil {return v, total, err}
+if err != nil {return}
 bz = bz[n:]
 total+=n
+case 1: // v.Core
+l := codonDecodeUint64(bz, &n, &err)
+if err != nil {return}
+bz = bz[n:]
+total+=n
+func(bz []byte) {
+for len(bz) != 0 {
+tag := codonDecodeUint64(bz, &n, &err)
+if err != nil {return}
+bz = bz[n:]
+total+=n
+tag = tag >> 3
+switch tag {
+case 0: // v.Core.CommitID
+l := codonDecodeUint64(bz, &n, &err)
+if err != nil {return}
+bz = bz[n:]
+total+=n
+func(bz []byte) {
+for len(bz) != 0 {
+tag := codonDecodeUint64(bz, &n, &err)
+if err != nil {return}
+bz = bz[n:]
+total+=n
+tag = tag >> 3
+switch tag {
+case 0: // v.Core.CommitID.Version
 v.Core.CommitID.Version = int64(codonDecodeInt64(bz, &n, &err))
-if err != nil {return v, total, err}
+if err != nil {return}
 bz = bz[n:]
 total+=n
-length = codonDecodeInt(bz, &n, &err)
-if err != nil {return v, total, err}
+case 1: // v.Core.CommitID.Hash
+var tmpBz []byte
+n, err = codonGetByteSlice(&tmpBz, bz)
+if err != nil {return}
 bz = bz[n:]
 total+=n
-v.Core.CommitID.Hash, n, err = codonGetByteSlice(bz, length)
-if err != nil {return v, total, err}
-bz = bz[n:]
-total+=n
-// end of v.Core.CommitID
-// end of v.Core
+v.Core.CommitID.Hash = tmpBz
+default: err = errors.New("Unknown Field")
+return
+}
+} // end for
+}(bz[:l]) // end func
+if err != nil {return}
+bz = bz[l:]
+n += int(l)
+default: err = errors.New("Unknown Field")
+return
+}
+} // end for
+}(bz[:l]) // end func
+if err != nil {return}
+bz = bz[l:]
+n += int(l)
+default: err = errors.New("Unknown Field")
+return
+}
+} // end for
 return v, total, nil
 } //End of DecodeStoreInfo
 
@@ -4498,109 +5178,207 @@ return
 
 // Non-Interface
 func EncodeValidator(w *[]byte, v Validator) {
-codonEncodeByteSlice(w, v.OperatorAddress[:])
-EncodePubKey(w, v.ConsPubKey)// interface_encode
-codonEncodeBool(w, v.Jailed)
-codonEncodeUint8(w, uint8(v.Status))
-EncodeInt(w, v.Tokens)
-EncodeDec(w, v.DelegatorShares)
-codonEncodeString(w, v.Description.Moniker)
-codonEncodeString(w, v.Description.Identity)
-codonEncodeString(w, v.Description.Website)
-codonEncodeString(w, v.Description.Details)
-// end of v.Description
-codonEncodeVarint(w, int64(v.UnbondingHeight))
-EncodeTime(w, v.UnbondingCompletionTime)
-EncodeDec(w, v.Commission.CommissionRates.Rate)
-EncodeDec(w, v.Commission.CommissionRates.MaxRate)
-EncodeDec(w, v.Commission.CommissionRates.MaxChangeRate)
-// end of v.Commission.CommissionRates
-EncodeTime(w, v.Commission.UpdateTime)
-// end of v.Commission
-EncodeInt(w, v.MinSelfDelegation)
+codonEncodeByteSlice(0, w, v.OperatorAddress[:])
+codonEncodeByteSlice(1, w, func() []byte {
+w := make([]byte, 0, 64)
+EncodePubKey(&w, v.ConsPubKey)// interface_encode
+return w
+}()) // end of v.ConsPubKey
+codonEncodeBool(2, w, v.Jailed)
+codonEncodeUint8(3, w, uint8(v.Status))
+codonEncodeByteSlice(4, w, EncodeInt(v.Tokens))
+codonEncodeByteSlice(5, w, EncodeDec(v.DelegatorShares))
+codonEncodeByteSlice(6, w, func() []byte {
+wBuf := make([]byte, 0, 64)
+w := &wBuf
+codonEncodeString(0, w, v.Description.Moniker)
+codonEncodeString(1, w, v.Description.Identity)
+codonEncodeString(2, w, v.Description.Website)
+codonEncodeString(3, w, v.Description.Details)
+return wBuf
+}()) // end of v.Description
+codonEncodeVarint(7, w, int64(v.UnbondingHeight))
+codonEncodeByteSlice(8, w, EncodeTime(v.UnbondingCompletionTime))
+codonEncodeByteSlice(9, w, func() []byte {
+wBuf := make([]byte, 0, 64)
+w := &wBuf
+codonEncodeByteSlice(0, w, func() []byte {
+wBuf := make([]byte, 0, 64)
+w := &wBuf
+codonEncodeByteSlice(0, w, EncodeDec(v.Commission.CommissionRates.Rate))
+codonEncodeByteSlice(1, w, EncodeDec(v.Commission.CommissionRates.MaxRate))
+codonEncodeByteSlice(2, w, EncodeDec(v.Commission.CommissionRates.MaxChangeRate))
+return wBuf
+}()) // end of v.Commission.CommissionRates
+codonEncodeByteSlice(1, w, EncodeTime(v.Commission.UpdateTime))
+return wBuf
+}()) // end of v.Commission
+codonEncodeByteSlice(10, w, EncodeInt(v.MinSelfDelegation))
 } //End of EncodeValidator
 
-func DecodeValidator(bz []byte) (Validator, int, error) {
-var err error
-var length int
-var v Validator
+func DecodeValidator(bz []byte) (v Validator, total int, err error) {
 var n int
-var total int
-length = codonDecodeInt(bz, &n, &err)
+for len(bz) != 0 {
+tag := codonDecodeUint64(bz, &n, &err)
 if err != nil {return v, total, err}
 bz = bz[n:]
 total+=n
-v.OperatorAddress, n, err = codonGetByteSlice(bz, length)
-if err != nil {return v, total, err}
+tag = tag >> 3
+switch tag {
+case 0: // v.OperatorAddress
+var tmpBz []byte
+n, err = codonGetByteSlice(&tmpBz, bz)
+if err != nil {return}
 bz = bz[n:]
 total+=n
+v.OperatorAddress = tmpBz
+case 1: // v.ConsPubKey
 v.ConsPubKey, n, err = DecodePubKey(bz)
-if err != nil {return v, total, err}
+if err != nil {return}
 bz = bz[n:]
 total+=n // interface_decode
+case 2: // v.Jailed
 v.Jailed = bool(codonDecodeBool(bz, &n, &err))
-if err != nil {return v, total, err}
+if err != nil {return}
 bz = bz[n:]
 total+=n
+case 3: // v.Status
 v.Status = BondStatus(codonDecodeUint8(bz, &n, &err))
-if err != nil {return v, total, err}
+if err != nil {return}
 bz = bz[n:]
 total+=n
+case 4: // v.Tokens
 v.Tokens, n, err = DecodeInt(bz)
-if err != nil {return v, total, err}
+if err != nil {return}
 bz = bz[n:]
 total+=n
+case 5: // v.DelegatorShares
 v.DelegatorShares, n, err = DecodeDec(bz)
-if err != nil {return v, total, err}
+if err != nil {return}
 bz = bz[n:]
 total+=n
+case 6: // v.Description
+l := codonDecodeUint64(bz, &n, &err)
+if err != nil {return}
+bz = bz[n:]
+total+=n
+func(bz []byte) {
+for len(bz) != 0 {
+tag := codonDecodeUint64(bz, &n, &err)
+if err != nil {return}
+bz = bz[n:]
+total+=n
+tag = tag >> 3
+switch tag {
+case 0: // v.Description.Moniker
 v.Description.Moniker = string(codonDecodeString(bz, &n, &err))
-if err != nil {return v, total, err}
+if err != nil {return}
 bz = bz[n:]
 total+=n
+case 1: // v.Description.Identity
 v.Description.Identity = string(codonDecodeString(bz, &n, &err))
-if err != nil {return v, total, err}
+if err != nil {return}
 bz = bz[n:]
 total+=n
+case 2: // v.Description.Website
 v.Description.Website = string(codonDecodeString(bz, &n, &err))
-if err != nil {return v, total, err}
+if err != nil {return}
 bz = bz[n:]
 total+=n
+case 3: // v.Description.Details
 v.Description.Details = string(codonDecodeString(bz, &n, &err))
-if err != nil {return v, total, err}
+if err != nil {return}
 bz = bz[n:]
 total+=n
-// end of v.Description
+default: err = errors.New("Unknown Field")
+return
+}
+} // end for
+}(bz[:l]) // end func
+if err != nil {return}
+bz = bz[l:]
+n += int(l)
+case 7: // v.UnbondingHeight
 v.UnbondingHeight = int64(codonDecodeInt64(bz, &n, &err))
-if err != nil {return v, total, err}
+if err != nil {return}
 bz = bz[n:]
 total+=n
+case 8: // v.UnbondingCompletionTime
 v.UnbondingCompletionTime, n, err = DecodeTime(bz)
-if err != nil {return v, total, err}
+if err != nil {return}
 bz = bz[n:]
 total+=n
+case 9: // v.Commission
+l := codonDecodeUint64(bz, &n, &err)
+if err != nil {return}
+bz = bz[n:]
+total+=n
+func(bz []byte) {
+for len(bz) != 0 {
+tag := codonDecodeUint64(bz, &n, &err)
+if err != nil {return}
+bz = bz[n:]
+total+=n
+tag = tag >> 3
+switch tag {
+case 0: // v.Commission.CommissionRates
+l := codonDecodeUint64(bz, &n, &err)
+if err != nil {return}
+bz = bz[n:]
+total+=n
+func(bz []byte) {
+for len(bz) != 0 {
+tag := codonDecodeUint64(bz, &n, &err)
+if err != nil {return}
+bz = bz[n:]
+total+=n
+tag = tag >> 3
+switch tag {
+case 0: // v.Commission.CommissionRates.Rate
 v.Commission.CommissionRates.Rate, n, err = DecodeDec(bz)
-if err != nil {return v, total, err}
+if err != nil {return}
 bz = bz[n:]
 total+=n
+case 1: // v.Commission.CommissionRates.MaxRate
 v.Commission.CommissionRates.MaxRate, n, err = DecodeDec(bz)
-if err != nil {return v, total, err}
+if err != nil {return}
 bz = bz[n:]
 total+=n
+case 2: // v.Commission.CommissionRates.MaxChangeRate
 v.Commission.CommissionRates.MaxChangeRate, n, err = DecodeDec(bz)
-if err != nil {return v, total, err}
+if err != nil {return}
 bz = bz[n:]
 total+=n
-// end of v.Commission.CommissionRates
+default: err = errors.New("Unknown Field")
+return
+}
+} // end for
+}(bz[:l]) // end func
+if err != nil {return}
+bz = bz[l:]
+n += int(l)
+case 1: // v.Commission.UpdateTime
 v.Commission.UpdateTime, n, err = DecodeTime(bz)
-if err != nil {return v, total, err}
+if err != nil {return}
 bz = bz[n:]
 total+=n
-// end of v.Commission
+default: err = errors.New("Unknown Field")
+return
+}
+} // end for
+}(bz[:l]) // end func
+if err != nil {return}
+bz = bz[l:]
+n += int(l)
+case 10: // v.MinSelfDelegation
 v.MinSelfDelegation, n, err = DecodeInt(bz)
-if err != nil {return v, total, err}
+if err != nil {return}
 bz = bz[n:]
 total+=n
+default: err = errors.New("Unknown Field")
+return
+}
+} // end for
 return v, total, nil
 } //End of DecodeValidator
 
@@ -4663,37 +5441,43 @@ return
 
 // Non-Interface
 func EncodeDelegation(w *[]byte, v Delegation) {
-codonEncodeByteSlice(w, v.DelegatorAddress[:])
-codonEncodeByteSlice(w, v.ValidatorAddress[:])
-EncodeDec(w, v.Shares)
+codonEncodeByteSlice(0, w, v.DelegatorAddress[:])
+codonEncodeByteSlice(1, w, v.ValidatorAddress[:])
+codonEncodeByteSlice(2, w, EncodeDec(v.Shares))
 } //End of EncodeDelegation
 
-func DecodeDelegation(bz []byte) (Delegation, int, error) {
-var err error
-var length int
-var v Delegation
+func DecodeDelegation(bz []byte) (v Delegation, total int, err error) {
 var n int
-var total int
-length = codonDecodeInt(bz, &n, &err)
+for len(bz) != 0 {
+tag := codonDecodeUint64(bz, &n, &err)
 if err != nil {return v, total, err}
 bz = bz[n:]
 total+=n
-v.DelegatorAddress, n, err = codonGetByteSlice(bz, length)
-if err != nil {return v, total, err}
+tag = tag >> 3
+switch tag {
+case 0: // v.DelegatorAddress
+var tmpBz []byte
+n, err = codonGetByteSlice(&tmpBz, bz)
+if err != nil {return}
 bz = bz[n:]
 total+=n
-length = codonDecodeInt(bz, &n, &err)
-if err != nil {return v, total, err}
+v.DelegatorAddress = tmpBz
+case 1: // v.ValidatorAddress
+var tmpBz []byte
+n, err = codonGetByteSlice(&tmpBz, bz)
+if err != nil {return}
 bz = bz[n:]
 total+=n
-v.ValidatorAddress, n, err = codonGetByteSlice(bz, length)
-if err != nil {return v, total, err}
-bz = bz[n:]
-total+=n
+v.ValidatorAddress = tmpBz
+case 2: // v.Shares
 v.Shares, n, err = DecodeDec(bz)
-if err != nil {return v, total, err}
+if err != nil {return}
 bz = bz[n:]
 total+=n
+default: err = errors.New("Unknown Field")
+return
+}
+} // end for
 return v, total, nil
 } //End of DecodeDelegation
 
@@ -4728,18 +5512,27 @@ return
 
 // Non-Interface
 func EncodeBondStatus(w *[]byte, v BondStatus) {
-codonEncodeUint8(w, uint8(v))
+codonEncodeUint8(0, w, uint8(v))
 } //End of EncodeBondStatus
 
-func DecodeBondStatus(bz []byte) (BondStatus, int, error) {
-var err error
-var v BondStatus
+func DecodeBondStatus(bz []byte) (v BondStatus, total int, err error) {
 var n int
-var total int
-v = BondStatus(codonDecodeUint8(bz, &n, &err))
+for len(bz) != 0 {
+tag := codonDecodeUint64(bz, &n, &err)
 if err != nil {return v, total, err}
 bz = bz[n:]
 total+=n
+tag = tag >> 3
+switch tag {
+case 0:
+v = BondStatus(codonDecodeUint8(bz, &n, &err))
+if err != nil {return}
+bz = bz[n:]
+total+=n
+default: err = errors.New("Unknown Field")
+return
+}
+} // end for
 return v, total, nil
 } //End of DecodeBondStatus
 
@@ -4756,28 +5549,39 @@ return
 
 // Non-Interface
 func EncodeDelegatorStartingInfo(w *[]byte, v DelegatorStartingInfo) {
-codonEncodeUvarint(w, uint64(v.PreviousPeriod))
-EncodeDec(w, v.Stake)
-codonEncodeUvarint(w, uint64(v.Height))
+codonEncodeUvarint(0, w, uint64(v.PreviousPeriod))
+codonEncodeByteSlice(1, w, EncodeDec(v.Stake))
+codonEncodeUvarint(2, w, uint64(v.Height))
 } //End of EncodeDelegatorStartingInfo
 
-func DecodeDelegatorStartingInfo(bz []byte) (DelegatorStartingInfo, int, error) {
-var err error
-var v DelegatorStartingInfo
+func DecodeDelegatorStartingInfo(bz []byte) (v DelegatorStartingInfo, total int, err error) {
 var n int
-var total int
+for len(bz) != 0 {
+tag := codonDecodeUint64(bz, &n, &err)
+if err != nil {return v, total, err}
+bz = bz[n:]
+total+=n
+tag = tag >> 3
+switch tag {
+case 0: // v.PreviousPeriod
 v.PreviousPeriod = uint64(codonDecodeUint64(bz, &n, &err))
-if err != nil {return v, total, err}
+if err != nil {return}
 bz = bz[n:]
 total+=n
+case 1: // v.Stake
 v.Stake, n, err = DecodeDec(bz)
-if err != nil {return v, total, err}
+if err != nil {return}
 bz = bz[n:]
 total+=n
+case 2: // v.Height
 v.Height = uint64(codonDecodeUint64(bz, &n, &err))
-if err != nil {return v, total, err}
+if err != nil {return}
 bz = bz[n:]
 total+=n
+default: err = errors.New("Unknown Field")
+return
+}
+} // end for
 return v, total, nil
 } //End of DecodeDelegatorStartingInfo
 
@@ -4798,39 +5602,43 @@ return
 
 // Non-Interface
 func EncodeValidatorHistoricalRewards(w *[]byte, v ValidatorHistoricalRewards) {
-codonEncodeVarint(w, int64(len(v.CumulativeRewardRatio)))
 for _0:=0; _0<len(v.CumulativeRewardRatio); _0++ {
-codonEncodeString(w, v.CumulativeRewardRatio[_0].Denom)
-EncodeDec(w, v.CumulativeRewardRatio[_0].Amount)
-// end of v.CumulativeRewardRatio[_0]
+codonEncodeByteSlice(0, w, func() []byte {
+wBuf := make([]byte, 0, 64)
+w := &wBuf
+codonEncodeString(0, w, v.CumulativeRewardRatio[_0].Denom)
+codonEncodeByteSlice(1, w, EncodeDec(v.CumulativeRewardRatio[_0].Amount))
+return wBuf
+}()) // end of v.CumulativeRewardRatio[_0]
 }
-codonEncodeUint16(w, v.ReferenceCount)
+codonEncodeUint16(1, w, v.ReferenceCount)
 } //End of EncodeValidatorHistoricalRewards
 
-func DecodeValidatorHistoricalRewards(bz []byte) (ValidatorHistoricalRewards, int, error) {
-var err error
-var length int
-var v ValidatorHistoricalRewards
+func DecodeValidatorHistoricalRewards(bz []byte) (v ValidatorHistoricalRewards, total int, err error) {
 var n int
-var total int
-length = codonDecodeInt(bz, &n, &err)
+for len(bz) != 0 {
+tag := codonDecodeUint64(bz, &n, &err)
 if err != nil {return v, total, err}
 bz = bz[n:]
 total+=n
-if length==0 {v.CumulativeRewardRatio = nil
-} else {
-v.CumulativeRewardRatio = make([]DecCoin, length)
-}
-for _0, length_0 := 0, length; _0<length_0; _0++ { //slice of struct
-v.CumulativeRewardRatio[_0], n, err = DecodeDecCoin(bz)
-if err != nil {return v, total, err}
+tag = tag >> 3
+switch tag {
+case 0: // v.CumulativeRewardRatio
+var tmp DecCoin
+tmp, n, err = DecodeDecCoin(bz)
+if err != nil {return}
 bz = bz[n:]
 total+=n
-}
+v.CumulativeRewardRatio = append(v.CumulativeRewardRatio, tmp)
+case 1: // v.ReferenceCount
 v.ReferenceCount = uint16(codonDecodeUint16(bz, &n, &err))
-if err != nil {return v, total, err}
+if err != nil {return}
 bz = bz[n:]
 total+=n
+default: err = errors.New("Unknown Field")
+return
+}
+} // end for
 return v, total, nil
 } //End of DecodeValidatorHistoricalRewards
 
@@ -4865,39 +5673,43 @@ return
 
 // Non-Interface
 func EncodeValidatorCurrentRewards(w *[]byte, v ValidatorCurrentRewards) {
-codonEncodeVarint(w, int64(len(v.Rewards)))
 for _0:=0; _0<len(v.Rewards); _0++ {
-codonEncodeString(w, v.Rewards[_0].Denom)
-EncodeDec(w, v.Rewards[_0].Amount)
-// end of v.Rewards[_0]
+codonEncodeByteSlice(0, w, func() []byte {
+wBuf := make([]byte, 0, 64)
+w := &wBuf
+codonEncodeString(0, w, v.Rewards[_0].Denom)
+codonEncodeByteSlice(1, w, EncodeDec(v.Rewards[_0].Amount))
+return wBuf
+}()) // end of v.Rewards[_0]
 }
-codonEncodeUvarint(w, uint64(v.Period))
+codonEncodeUvarint(1, w, uint64(v.Period))
 } //End of EncodeValidatorCurrentRewards
 
-func DecodeValidatorCurrentRewards(bz []byte) (ValidatorCurrentRewards, int, error) {
-var err error
-var length int
-var v ValidatorCurrentRewards
+func DecodeValidatorCurrentRewards(bz []byte) (v ValidatorCurrentRewards, total int, err error) {
 var n int
-var total int
-length = codonDecodeInt(bz, &n, &err)
+for len(bz) != 0 {
+tag := codonDecodeUint64(bz, &n, &err)
 if err != nil {return v, total, err}
 bz = bz[n:]
 total+=n
-if length==0 {v.Rewards = nil
-} else {
-v.Rewards = make([]DecCoin, length)
-}
-for _0, length_0 := 0, length; _0<length_0; _0++ { //slice of struct
-v.Rewards[_0], n, err = DecodeDecCoin(bz)
-if err != nil {return v, total, err}
+tag = tag >> 3
+switch tag {
+case 0: // v.Rewards
+var tmp DecCoin
+tmp, n, err = DecodeDecCoin(bz)
+if err != nil {return}
 bz = bz[n:]
 total+=n
-}
+v.Rewards = append(v.Rewards, tmp)
+case 1: // v.Period
 v.Period = uint64(codonDecodeUint64(bz, &n, &err))
-if err != nil {return v, total, err}
+if err != nil {return}
 bz = bz[n:]
 total+=n
+default: err = errors.New("Unknown Field")
+return
+}
+} // end for
 return v, total, nil
 } //End of DecodeValidatorCurrentRewards
 
@@ -4932,48 +5744,59 @@ return
 
 // Non-Interface
 func EncodeValidatorSigningInfo(w *[]byte, v ValidatorSigningInfo) {
-codonEncodeByteSlice(w, v.Address[:])
-codonEncodeVarint(w, int64(v.StartHeight))
-codonEncodeVarint(w, int64(v.IndexOffset))
-EncodeTime(w, v.JailedUntil)
-codonEncodeBool(w, v.Tombstoned)
-codonEncodeVarint(w, int64(v.MissedBlocksCounter))
+codonEncodeByteSlice(0, w, v.Address[:])
+codonEncodeVarint(1, w, int64(v.StartHeight))
+codonEncodeVarint(2, w, int64(v.IndexOffset))
+codonEncodeByteSlice(3, w, EncodeTime(v.JailedUntil))
+codonEncodeBool(4, w, v.Tombstoned)
+codonEncodeVarint(5, w, int64(v.MissedBlocksCounter))
 } //End of EncodeValidatorSigningInfo
 
-func DecodeValidatorSigningInfo(bz []byte) (ValidatorSigningInfo, int, error) {
-var err error
-var length int
-var v ValidatorSigningInfo
+func DecodeValidatorSigningInfo(bz []byte) (v ValidatorSigningInfo, total int, err error) {
 var n int
-var total int
-length = codonDecodeInt(bz, &n, &err)
+for len(bz) != 0 {
+tag := codonDecodeUint64(bz, &n, &err)
 if err != nil {return v, total, err}
 bz = bz[n:]
 total+=n
-v.Address, n, err = codonGetByteSlice(bz, length)
-if err != nil {return v, total, err}
+tag = tag >> 3
+switch tag {
+case 0: // v.Address
+var tmpBz []byte
+n, err = codonGetByteSlice(&tmpBz, bz)
+if err != nil {return}
 bz = bz[n:]
 total+=n
+v.Address = tmpBz
+case 1: // v.StartHeight
 v.StartHeight = int64(codonDecodeInt64(bz, &n, &err))
-if err != nil {return v, total, err}
+if err != nil {return}
 bz = bz[n:]
 total+=n
+case 2: // v.IndexOffset
 v.IndexOffset = int64(codonDecodeInt64(bz, &n, &err))
-if err != nil {return v, total, err}
+if err != nil {return}
 bz = bz[n:]
 total+=n
+case 3: // v.JailedUntil
 v.JailedUntil, n, err = DecodeTime(bz)
-if err != nil {return v, total, err}
+if err != nil {return}
 bz = bz[n:]
 total+=n
+case 4: // v.Tombstoned
 v.Tombstoned = bool(codonDecodeBool(bz, &n, &err))
-if err != nil {return v, total, err}
+if err != nil {return}
 bz = bz[n:]
 total+=n
+case 5: // v.MissedBlocksCounter
 v.MissedBlocksCounter = int64(codonDecodeInt64(bz, &n, &err))
-if err != nil {return v, total, err}
+if err != nil {return}
 bz = bz[n:]
 total+=n
+default: err = errors.New("Unknown Field")
+return
+}
+} // end for
 return v, total, nil
 } //End of DecodeValidatorSigningInfo
 
@@ -5008,23 +5831,33 @@ return
 
 // Non-Interface
 func EncodeValidatorSlashEvent(w *[]byte, v ValidatorSlashEvent) {
-codonEncodeUvarint(w, uint64(v.ValidatorPeriod))
-EncodeDec(w, v.Fraction)
+codonEncodeUvarint(0, w, uint64(v.ValidatorPeriod))
+codonEncodeByteSlice(1, w, EncodeDec(v.Fraction))
 } //End of EncodeValidatorSlashEvent
 
-func DecodeValidatorSlashEvent(bz []byte) (ValidatorSlashEvent, int, error) {
-var err error
-var v ValidatorSlashEvent
+func DecodeValidatorSlashEvent(bz []byte) (v ValidatorSlashEvent, total int, err error) {
 var n int
-var total int
+for len(bz) != 0 {
+tag := codonDecodeUint64(bz, &n, &err)
+if err != nil {return v, total, err}
+bz = bz[n:]
+total+=n
+tag = tag >> 3
+switch tag {
+case 0: // v.ValidatorPeriod
 v.ValidatorPeriod = uint64(codonDecodeUint64(bz, &n, &err))
-if err != nil {return v, total, err}
+if err != nil {return}
 bz = bz[n:]
 total+=n
+case 1: // v.Fraction
 v.Fraction, n, err = DecodeDec(bz)
-if err != nil {return v, total, err}
+if err != nil {return}
 bz = bz[n:]
 total+=n
+default: err = errors.New("Unknown Field")
+return
+}
+} // end for
 return v, total, nil
 } //End of DecodeValidatorSlashEvent
 
@@ -5043,34 +5876,37 @@ return
 
 // Non-Interface
 func EncodeDecCoins(w *[]byte, v DecCoins) {
-codonEncodeVarint(w, int64(len(v)))
 for _0:=0; _0<len(v); _0++ {
-codonEncodeString(w, v[_0].Denom)
-EncodeDec(w, v[_0].Amount)
-// end of v[_0]
+codonEncodeByteSlice(0, w, func() []byte {
+wBuf := make([]byte, 0, 64)
+w := &wBuf
+codonEncodeString(0, w, v[_0].Denom)
+codonEncodeByteSlice(1, w, EncodeDec(v[_0].Amount))
+return wBuf
+}()) // end of v[_0]
 }
 } //End of EncodeDecCoins
 
-func DecodeDecCoins(bz []byte) (DecCoins, int, error) {
-var err error
-var length int
-var v DecCoins
+func DecodeDecCoins(bz []byte) (v DecCoins, total int, err error) {
 var n int
-var total int
-length = codonDecodeInt(bz, &n, &err)
+for len(bz) != 0 {
+tag := codonDecodeUint64(bz, &n, &err)
 if err != nil {return v, total, err}
 bz = bz[n:]
 total+=n
-if length==0 {v = nil
-} else {
-v = make([]DecCoin, length)
-}
-for _0, length_0 := 0, length; _0<length_0; _0++ { //slice of struct
-v[_0], n, err = DecodeDecCoin(bz)
-if err != nil {return v, total, err}
+tag = tag >> 3
+switch tag {
+case 0:
+var tmp DecCoin
+tmp, n, err = DecodeDecCoin(bz)
+if err != nil {return}
 bz = bz[n:]
 total+=n
+v = append(v, tmp)
+default: err = errors.New("Unknown Field")
+return
 }
+} // end for
 return v, total, nil
 } //End of DecodeDecCoins
 
@@ -5103,23 +5939,29 @@ return
 
 // Non-Interface
 func EncodeValAddress(w *[]byte, v ValAddress) {
-codonEncodeByteSlice(w, v[:])
+codonEncodeByteSlice(0, w, v[:])
 } //End of EncodeValAddress
 
-func DecodeValAddress(bz []byte) (ValAddress, int, error) {
-var err error
-var length int
-var v ValAddress
+func DecodeValAddress(bz []byte) (v ValAddress, total int, err error) {
 var n int
-var total int
-length = codonDecodeInt(bz, &n, &err)
+for len(bz) != 0 {
+tag := codonDecodeUint64(bz, &n, &err)
 if err != nil {return v, total, err}
 bz = bz[n:]
 total+=n
-v, n, err = codonGetByteSlice(bz, length)
-if err != nil {return v, total, err}
+tag = tag >> 3
+switch tag {
+case 0:
+var tmpBz []byte
+n, err = codonGetByteSlice(&tmpBz, bz)
+if err != nil {return}
 bz = bz[n:]
 total+=n
+v = tmpBz
+default: err = errors.New("Unknown Field")
+return
+}
+} // end for
 return v, total, nil
 } //End of DecodeValAddress
 
@@ -5144,36 +5986,33 @@ return
 
 // Non-Interface
 func EncodeValAddressList(w *[]byte, v ValAddressList) {
-codonEncodeVarint(w, int64(len(v)))
 for _0:=0; _0<len(v); _0++ {
-codonEncodeByteSlice(w, v[_0][:])
+codonEncodeByteSlice(0, w, v[_0][:])
 }
 } //End of EncodeValAddressList
 
-func DecodeValAddressList(bz []byte) (ValAddressList, int, error) {
-var err error
-var length int
-var v ValAddressList
+func DecodeValAddressList(bz []byte) (v ValAddressList, total int, err error) {
 var n int
-var total int
-length = codonDecodeInt(bz, &n, &err)
+for len(bz) != 0 {
+tag := codonDecodeUint64(bz, &n, &err)
 if err != nil {return v, total, err}
 bz = bz[n:]
 total+=n
-if length==0 {v = nil
-} else {
-v = make([]ValAddress, length)
+tag = tag >> 3
+switch tag {
+case 0:
+var tmp ValAddress
+var tmpBz []byte
+n, err = codonGetByteSlice(&tmpBz, bz)
+if err != nil {return}
+bz = bz[n:]
+total+=n
+tmp = tmpBz
+v = append(v, tmp)
+default: err = errors.New("Unknown Field")
+return
 }
-for _0, length_0 := 0, length; _0<length_0; _0++ { //slice of slice
-length = codonDecodeInt(bz, &n, &err)
-if err != nil {return v, total, err}
-bz = bz[n:]
-total+=n
-v[_0], n, err = codonGetByteSlice(bz, length)
-if err != nil {return v, total, err}
-bz = bz[n:]
-total+=n
-}
+} // end for
 return v, total, nil
 } //End of DecodeValAddressList
 
@@ -5215,36 +6054,26 @@ func DecodePubKey(bz []byte) (PubKey, int, error) {
 var v PubKey
 var magicBytes [4]byte
 var n int
-var err error
-notNil := codonDecodeBool(bz, &n, &err)
-if err != nil {return v, n, err}
-bz = bz[n:]
-if !notNil {
-return nil, n, nil
-}
 for i:=0; i<4; i++ {magicBytes[i] = bz[i]}
 switch magicBytes {
 case [4]byte{114,76,37,23}:
 v, n, err := DecodePubKeyEd25519(bz[4:])
-return v, n+5, err
+return v, n+4, err
 case [4]byte{14,33,23,141}:
 v, n, err := DecodePubKeyMultisigThreshold(bz[4:])
-return v, n+5, err
+return v, n+4, err
 case [4]byte{51,161,20,197}:
 v, n, err := DecodePubKeySecp256k1(bz[4:])
-return v, n+5, err
+return v, n+4, err
 case [4]byte{247,42,43,179}:
 v, n, err := DecodeStdSignature(bz[4:])
-return v, n+5, err
+return v, n+4, err
 default:
 panic("Unknown type")
 } // end of switch
 return v, n, nil
 } // end of DecodePubKey
 func EncodePubKey(w *[]byte, x interface{}) {
-codonEncodeBool(w, x != nil)
-if x == nil {return}
-
 switch v := x.(type) {
 case PubKeyEd25519:
 *w = append(*w, getMagicBytes("PubKeyEd25519")...)
@@ -5307,30 +6136,20 @@ func DecodePrivKey(bz []byte) (PrivKey, int, error) {
 var v PrivKey
 var magicBytes [4]byte
 var n int
-var err error
-notNil := codonDecodeBool(bz, &n, &err)
-if err != nil {return v, n, err}
-bz = bz[n:]
-if !notNil {
-return nil, n, nil
-}
 for i:=0; i<4; i++ {magicBytes[i] = bz[i]}
 switch magicBytes {
 case [4]byte{158,94,112,161}:
 v, n, err := DecodePrivKeyEd25519(bz[4:])
-return v, n+5, err
+return v, n+4, err
 case [4]byte{83,16,177,42}:
 v, n, err := DecodePrivKeySecp256k1(bz[4:])
-return v, n+5, err
+return v, n+4, err
 default:
 panic("Unknown type")
 } // end of switch
 return v, n, nil
 } // end of DecodePrivKey
 func EncodePrivKey(w *[]byte, x interface{}) {
-codonEncodeBool(w, x != nil)
-if x == nil {return}
-
 switch v := x.(type) {
 case PrivKeyEd25519:
 *w = append(*w, getMagicBytes("PrivKeyEd25519")...)
@@ -5381,66 +6200,56 @@ func DecodeMsg(bz []byte) (Msg, int, error) {
 var v Msg
 var magicBytes [4]byte
 var n int
-var err error
-notNil := codonDecodeBool(bz, &n, &err)
-if err != nil {return v, n, err}
-bz = bz[n:]
-if !notNil {
-return nil, n, nil
-}
 for i:=0; i<4; i++ {magicBytes[i] = bz[i]}
 switch magicBytes {
 case [4]byte{141,7,107,68}:
 v, n, err := DecodeMsgBeginRedelegate(bz[4:])
-return v, n+5, err
+return v, n+4, err
 case [4]byte{24,79,66,107}:
 v, n, err := DecodeMsgCreateValidator(bz[4:])
-return v, n+5, err
+return v, n+4, err
 case [4]byte{184,121,196,185}:
 v, n, err := DecodeMsgDelegate(bz[4:])
-return v, n+5, err
+return v, n+4, err
 case [4]byte{234,76,240,151}:
 v, n, err := DecodeMsgDeposit(bz[4:])
-return v, n+5, err
+return v, n+4, err
 case [4]byte{9,254,168,109}:
 v, n, err := DecodeMsgEditValidator(bz[4:])
-return v, n+5, err
+return v, n+4, err
 case [4]byte{64,119,59,163}:
 v, n, err := DecodeMsgMultiSend(bz[4:])
-return v, n+5, err
+return v, n+4, err
 case [4]byte{212,255,125,220}:
 v, n, err := DecodeMsgSend(bz[4:])
-return v, n+5, err
+return v, n+4, err
 case [4]byte{208,136,199,77}:
 v, n, err := DecodeMsgSetWithdrawAddress(bz[4:])
-return v, n+5, err
+return v, n+4, err
 case [4]byte{21,241,6,56}:
 v, n, err := DecodeMsgUndelegate(bz[4:])
-return v, n+5, err
+return v, n+4, err
 case [4]byte{139,110,39,159}:
 v, n, err := DecodeMsgUnjail(bz[4:])
-return v, n+5, err
+return v, n+4, err
 case [4]byte{109,173,240,7}:
 v, n, err := DecodeMsgVerifyInvariant(bz[4:])
-return v, n+5, err
+return v, n+4, err
 case [4]byte{233,121,28,250}:
 v, n, err := DecodeMsgVote(bz[4:])
-return v, n+5, err
+return v, n+4, err
 case [4]byte{43,19,183,111}:
 v, n, err := DecodeMsgWithdrawDelegatorReward(bz[4:])
-return v, n+5, err
+return v, n+4, err
 case [4]byte{84,85,236,88}:
 v, n, err := DecodeMsgWithdrawValidatorCommission(bz[4:])
-return v, n+5, err
+return v, n+4, err
 default:
 panic("Unknown type")
 } // end of switch
 return v, n, nil
 } // end of DecodeMsg
 func EncodeMsg(w *[]byte, x interface{}) {
-codonEncodeBool(w, x != nil)
-if x == nil {return}
-
 switch v := x.(type) {
 case MsgBeginRedelegate:
 *w = append(*w, getMagicBytes("MsgBeginRedelegate")...)
@@ -5659,39 +6468,29 @@ func DecodeAccount(bz []byte) (Account, int, error) {
 var v Account
 var magicBytes [4]byte
 var n int
-var err error
-notNil := codonDecodeBool(bz, &n, &err)
-if err != nil {return v, n, err}
-bz = bz[n:]
-if !notNil {
-return nil, n, nil
-}
 for i:=0; i<4; i++ {magicBytes[i] = bz[i]}
 switch magicBytes {
 case [4]byte{153,157,134,34}:
 v, n, err := DecodeBaseAccount(bz[4:])
-return &v, n+5, err
+return &v, n+4, err
 case [4]byte{78,248,144,54}:
 v, n, err := DecodeBaseVestingAccount(bz[4:])
-return v, n+5, err
+return v, n+4, err
 case [4]byte{75,69,41,151}:
 v, n, err := DecodeContinuousVestingAccount(bz[4:])
-return v, n+5, err
+return v, n+4, err
 case [4]byte{59,193,203,230}:
 v, n, err := DecodeDelayedVestingAccount(bz[4:])
-return v, n+5, err
+return v, n+4, err
 case [4]byte{37,29,227,212}:
 v, n, err := DecodeModuleAccount(bz[4:])
-return v, n+5, err
+return v, n+4, err
 default:
 panic("Unknown type")
 } // end of switch
 return v, n, nil
 } // end of DecodeAccount
 func EncodeAccount(w *[]byte, x interface{}) {
-codonEncodeBool(w, x != nil)
-if x == nil {return}
-
 switch v := x.(type) {
 case BaseAccount:
 *w = append(*w, getMagicBytes("BaseAccount")...)
@@ -5782,30 +6581,20 @@ func DecodeVestingAccount(bz []byte) (VestingAccount, int, error) {
 var v VestingAccount
 var magicBytes [4]byte
 var n int
-var err error
-notNil := codonDecodeBool(bz, &n, &err)
-if err != nil {return v, n, err}
-bz = bz[n:]
-if !notNil {
-return nil, n, nil
-}
 for i:=0; i<4; i++ {magicBytes[i] = bz[i]}
 switch magicBytes {
 case [4]byte{75,69,41,151}:
 v, n, err := DecodeContinuousVestingAccount(bz[4:])
-return &v, n+5, err
+return &v, n+4, err
 case [4]byte{59,193,203,230}:
 v, n, err := DecodeDelayedVestingAccount(bz[4:])
-return &v, n+5, err
+return &v, n+4, err
 default:
 panic("Unknown type")
 } // end of switch
 return v, n, nil
 } // end of DecodeVestingAccount
 func EncodeVestingAccount(w *[]byte, x interface{}) {
-codonEncodeBool(w, x != nil)
-if x == nil {return}
-
 switch v := x.(type) {
 case ContinuousVestingAccount:
 *w = append(*w, getMagicBytes("ContinuousVestingAccount")...)
@@ -5852,36 +6641,26 @@ func DecodeContent(bz []byte) (Content, int, error) {
 var v Content
 var magicBytes [4]byte
 var n int
-var err error
-notNil := codonDecodeBool(bz, &n, &err)
-if err != nil {return v, n, err}
-bz = bz[n:]
-if !notNil {
-return nil, n, nil
-}
 for i:=0; i<4; i++ {magicBytes[i] = bz[i]}
 switch magicBytes {
 case [4]byte{31,93,37,208}:
 v, n, err := DecodeCommunityPoolSpendProposal(bz[4:])
-return v, n+5, err
+return v, n+4, err
 case [4]byte{49,37,122,86}:
 v, n, err := DecodeParameterChangeProposal(bz[4:])
-return v, n+5, err
+return v, n+4, err
 case [4]byte{162,148,222,207}:
 v, n, err := DecodeSoftwareUpgradeProposal(bz[4:])
-return v, n+5, err
+return v, n+4, err
 case [4]byte{207,179,211,152}:
 v, n, err := DecodeTextProposal(bz[4:])
-return v, n+5, err
+return v, n+4, err
 default:
 panic("Unknown type")
 } // end of switch
 return v, n, nil
 } // end of DecodeContent
 func EncodeContent(w *[]byte, x interface{}) {
-codonEncodeBool(w, x != nil)
-if x == nil {return}
-
 switch v := x.(type) {
 case CommunityPoolSpendProposal:
 *w = append(*w, getMagicBytes("CommunityPoolSpendProposal")...)
@@ -5960,27 +6739,17 @@ func DecodeTx(bz []byte) (Tx, int, error) {
 var v Tx
 var magicBytes [4]byte
 var n int
-var err error
-notNil := codonDecodeBool(bz, &n, &err)
-if err != nil {return v, n, err}
-bz = bz[n:]
-if !notNil {
-return nil, n, nil
-}
 for i:=0; i<4; i++ {magicBytes[i] = bz[i]}
 switch magicBytes {
 case [4]byte{247,170,118,185}:
 v, n, err := DecodeStdTx(bz[4:])
-return v, n+5, err
+return v, n+4, err
 default:
 panic("Unknown type")
 } // end of switch
 return v, n, nil
 } // end of DecodeTx
 func EncodeTx(w *[]byte, x interface{}) {
-codonEncodeBool(w, x != nil)
-if x == nil {return}
-
 switch v := x.(type) {
 case StdTx:
 *w = append(*w, getMagicBytes("StdTx")...)
@@ -6017,27 +6786,17 @@ func DecodeModuleAccountI(bz []byte) (ModuleAccountI, int, error) {
 var v ModuleAccountI
 var magicBytes [4]byte
 var n int
-var err error
-notNil := codonDecodeBool(bz, &n, &err)
-if err != nil {return v, n, err}
-bz = bz[n:]
-if !notNil {
-return nil, n, nil
-}
 for i:=0; i<4; i++ {magicBytes[i] = bz[i]}
 switch magicBytes {
 case [4]byte{37,29,227,212}:
 v, n, err := DecodeModuleAccount(bz[4:])
-return v, n+5, err
+return v, n+4, err
 default:
 panic("Unknown type")
 } // end of switch
 return v, n, nil
 } // end of DecodeModuleAccountI
 func EncodeModuleAccountI(w *[]byte, x interface{}) {
-codonEncodeBool(w, x != nil)
-if x == nil {return}
-
 switch v := x.(type) {
 case ModuleAccount:
 *w = append(*w, getMagicBytes("ModuleAccount")...)
@@ -6074,27 +6833,17 @@ func DecodeSupplyI(bz []byte) (SupplyI, int, error) {
 var v SupplyI
 var magicBytes [4]byte
 var n int
-var err error
-notNil := codonDecodeBool(bz, &n, &err)
-if err != nil {return v, n, err}
-bz = bz[n:]
-if !notNil {
-return nil, n, nil
-}
 for i:=0; i<4; i++ {magicBytes[i] = bz[i]}
 switch magicBytes {
 case [4]byte{191,66,141,63}:
 v, n, err := DecodeSupply(bz[4:])
-return v, n+5, err
+return v, n+4, err
 default:
 panic("Unknown type")
 } // end of switch
 return v, n, nil
 } // end of DecodeSupplyI
 func EncodeSupplyI(w *[]byte, x interface{}) {
-codonEncodeBool(w, x != nil)
-if x == nil {return}
-
 switch v := x.(type) {
 case Supply:
 *w = append(*w, getMagicBytes("Supply")...)
@@ -6937,15 +7686,9 @@ return v, n, nil
 } // end of DecodeAny
 func AssignIfcPtrFromStruct(ifcPtrIn interface{}, structObjIn interface{}) {
 switch ifcPtr := ifcPtrIn.(type) {
-case *PubKey:
+case *ModuleAccountI:
 switch structObj := structObjIn.(type) {
-	case PubKeySecp256k1:
-	*ifcPtr = &structObj
-	case PubKeyEd25519:
-	*ifcPtr = &structObj
-	case PubKeyMultisigThreshold:
-	*ifcPtr = &structObj
-	case StdSignature:
+	case ModuleAccount:
 	*ifcPtr = &structObj
 	default:
 	panic(fmt.Sprintf("Type mismatch %v %v\n", reflect.TypeOf(ifcPtr), reflect.TypeOf(structObjIn)))
@@ -6959,50 +7702,72 @@ switch structObj := structObjIn.(type) {
 	default:
 	panic(fmt.Sprintf("Type mismatch %v %v\n", reflect.TypeOf(ifcPtr), reflect.TypeOf(structObjIn)))
 	} // end switch of structs
+case *Account:
+switch structObj := structObjIn.(type) {
+	case ModuleAccount:
+	*ifcPtr = &structObj
+	case BaseAccount:
+	*ifcPtr = &structObj
+	case ContinuousVestingAccount:
+	*ifcPtr = &structObj
+	case DelayedVestingAccount:
+	*ifcPtr = &structObj
+	case BaseVestingAccount:
+	*ifcPtr = &structObj
+	default:
+	panic(fmt.Sprintf("Type mismatch %v %v\n", reflect.TypeOf(ifcPtr), reflect.TypeOf(structObjIn)))
+	} // end switch of structs
+case *PubKey:
+switch structObj := structObjIn.(type) {
+	case PubKeyMultisigThreshold:
+	*ifcPtr = &structObj
+	case PubKeyEd25519:
+	*ifcPtr = &structObj
+	case StdSignature:
+	*ifcPtr = &structObj
+	case PubKeySecp256k1:
+	*ifcPtr = &structObj
+	default:
+	panic(fmt.Sprintf("Type mismatch %v %v\n", reflect.TypeOf(ifcPtr), reflect.TypeOf(structObjIn)))
+	} // end switch of structs
 case *Msg:
 switch structObj := structObjIn.(type) {
-	case MsgWithdrawValidatorCommission:
-	*ifcPtr = &structObj
-	case MsgSend:
-	*ifcPtr = &structObj
-	case MsgWithdrawDelegatorReward:
-	*ifcPtr = &structObj
-	case MsgDeposit:
-	*ifcPtr = &structObj
-	case MsgCreateValidator:
-	*ifcPtr = &structObj
-	case MsgEditValidator:
-	*ifcPtr = &structObj
 	case MsgBeginRedelegate:
+	*ifcPtr = &structObj
+	case MsgUnjail:
+	*ifcPtr = &structObj
+	case MsgVote:
 	*ifcPtr = &structObj
 	case MsgUndelegate:
 	*ifcPtr = &structObj
-	case MsgUnjail:
+	case MsgMultiSend:
+	*ifcPtr = &structObj
+	case MsgDeposit:
+	*ifcPtr = &structObj
+	case MsgSend:
+	*ifcPtr = &structObj
+	case MsgEditValidator:
+	*ifcPtr = &structObj
+	case MsgVerifyInvariant:
+	*ifcPtr = &structObj
+	case MsgWithdrawDelegatorReward:
 	*ifcPtr = &structObj
 	case MsgDelegate:
 	*ifcPtr = &structObj
 	case MsgSetWithdrawAddress:
 	*ifcPtr = &structObj
-	case MsgVote:
+	case MsgWithdrawValidatorCommission:
 	*ifcPtr = &structObj
-	case MsgMultiSend:
-	*ifcPtr = &structObj
-	case MsgVerifyInvariant:
+	case MsgCreateValidator:
 	*ifcPtr = &structObj
 	default:
 	panic(fmt.Sprintf("Type mismatch %v %v\n", reflect.TypeOf(ifcPtr), reflect.TypeOf(structObjIn)))
 	} // end switch of structs
-case *Account:
+case *VestingAccount:
 switch structObj := structObjIn.(type) {
 	case ContinuousVestingAccount:
 	*ifcPtr = &structObj
-	case BaseVestingAccount:
-	*ifcPtr = &structObj
 	case DelayedVestingAccount:
-	*ifcPtr = &structObj
-	case ModuleAccount:
-	*ifcPtr = &structObj
-	case BaseAccount:
 	*ifcPtr = &structObj
 	default:
 	panic(fmt.Sprintf("Type mismatch %v %v\n", reflect.TypeOf(ifcPtr), reflect.TypeOf(structObjIn)))
@@ -7011,18 +7776,11 @@ case *Content:
 switch structObj := structObjIn.(type) {
 	case CommunityPoolSpendProposal:
 	*ifcPtr = &structObj
-	case ParameterChangeProposal:
+	case TextProposal:
 	*ifcPtr = &structObj
 	case SoftwareUpgradeProposal:
 	*ifcPtr = &structObj
-	case TextProposal:
-	*ifcPtr = &structObj
-	default:
-	panic(fmt.Sprintf("Type mismatch %v %v\n", reflect.TypeOf(ifcPtr), reflect.TypeOf(structObjIn)))
-	} // end switch of structs
-case *SupplyI:
-switch structObj := structObjIn.(type) {
-	case Supply:
+	case ParameterChangeProposal:
 	*ifcPtr = &structObj
 	default:
 	panic(fmt.Sprintf("Type mismatch %v %v\n", reflect.TypeOf(ifcPtr), reflect.TypeOf(structObjIn)))
@@ -7034,18 +7792,9 @@ switch structObj := structObjIn.(type) {
 	default:
 	panic(fmt.Sprintf("Type mismatch %v %v\n", reflect.TypeOf(ifcPtr), reflect.TypeOf(structObjIn)))
 	} // end switch of structs
-case *ModuleAccountI:
+case *SupplyI:
 switch structObj := structObjIn.(type) {
-	case ModuleAccount:
-	*ifcPtr = &structObj
-	default:
-	panic(fmt.Sprintf("Type mismatch %v %v\n", reflect.TypeOf(ifcPtr), reflect.TypeOf(structObjIn)))
-	} // end switch of structs
-case *VestingAccount:
-switch structObj := structObjIn.(type) {
-	case DelayedVestingAccount:
-	*ifcPtr = &structObj
-	case ContinuousVestingAccount:
+	case Supply:
 	*ifcPtr = &structObj
 	default:
 	panic(fmt.Sprintf("Type mismatch %v %v\n", reflect.TypeOf(ifcPtr), reflect.TypeOf(structObjIn)))
