@@ -126,18 +126,7 @@ func EncodeTime(t time.Time) []byte {
 	return buf[:n+m]
 }
 
-func DecodeTime(bz []byte) (t time.Time, m int, err error) {
-	var bs []byte
-	n, err := codonGetByteSlice(&bs, bz)
-	if err != nil {
-		return
-	}
-	t, m, err = DecodeTimeHelp(bs)
-	m += n
-	return
-}
-
-func DecodeTimeHelp(bz []byte) (time.Time, int, error) {
+func DecodeTime(bz []byte) (time.Time, int, error) {
 	sec, n := binary.Varint(bz)
 	var err error
 	if n == 0 {
@@ -206,29 +195,20 @@ func ByteSliceWithLengthPrefix(bz []byte) []byte {
 }
 
 func EncodeInt(v sdk.Int) []byte {
-	bz := v.BigInt().Bytes()
-	res := ByteSliceWithLengthPrefix(bz)
-
 	b := byte(0)
 	if v.BigInt().Sign() < 0 {
 		b = byte(1)
 	}
-	res = append(res, b)
-	return res
+	bz := v.BigInt().Bytes()
+	return append(bz, b)
 }
 
 func DecodeInt(bz []byte) (v sdk.Int, n int, err error) {
-	var bs []byte
-	n, err = codonGetByteSlice(&bs, bz)
-	if err != nil {
-		return
-	}
-	var k int
-	isNeg := codonDecodeBool(bz[n:], &k, &err)
-	n = n + 1
+	isNeg := bz[len(bz)-1] != 0
+	n = len(bz)
 	x := big.NewInt(0)
 	z := big.NewInt(0)
-	x.SetBytes(bs)
+	x.SetBytes(bz[:len(bz)-1])
 	if isNeg {
 		z.Neg(x)
 		v = sdk.NewIntFromBigInt(z)
@@ -252,31 +232,19 @@ func DeepCopyInt(i sdk.Int) sdk.Int {
 }
 
 func EncodeDec(v sdk.Dec) []byte {
-	bz := v.Int.Bytes()
-	res := ByteSliceWithLengthPrefix(bz)
-
 	b := byte(0)
 	if v.Int.Sign() < 0 {
 		b = byte(1)
 	}
-	res = append(res, b)
-	return res
+	bz := v.Int.Bytes()
+	return append(bz, b)
 }
 
 func DecodeDec(bz []byte) (v sdk.Dec, n int, err error) {
-	var bs []byte
-	n, err = codonGetByteSlice(&bs, bz)
-	if err != nil {
-		return
-	}
-	var k int
-	isNeg := codonDecodeBool(bz[n:], &k, &err)
-	n = n + 1
-	if err != nil {
-		return
-	}
+	isNeg := bz[len(bz)-1] != 0
+	n = len(bz)
 	v = sdk.ZeroDec()
-	v.Int.SetBytes(bs)
+	v.Int.SetBytes(bz[:len(bz)-1])
 	if isNeg {
 		v.Int.Neg(v.Int)
 	}
@@ -296,6 +264,5 @@ func RandDec(r RandSrc) sdk.Dec {
 func DeepCopyDec(d sdk.Dec) sdk.Dec {
 	return d.MulInt64(1)
 }
-
 
 `
