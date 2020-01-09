@@ -176,53 +176,53 @@ type bechValidator struct {
 	MinSelfDelegation       sdk.Int        `json:"min_self_delegation" yaml:"min_self_delegation"` // minimum self delegation
 }
 
-// MarshalJSON marshals the validator to JSON using Bech32
-func (v Validator) MarshalJSON() ([]byte, error) {
-	bechConsPubKey, err := sdk.Bech32ifyConsPub(v.ConsPubKey)
-	if err != nil {
-		return nil, err
-	}
-
-	return codec.Cdc.MarshalJSON(bechValidator{
-		OperatorAddress:         v.OperatorAddress,
-		ConsPubKey:              bechConsPubKey,
-		Jailed:                  v.Jailed,
-		Status:                  v.Status,
-		Tokens:                  v.Tokens,
-		DelegatorShares:         v.DelegatorShares,
-		Description:             v.Description,
-		UnbondingHeight:         v.UnbondingHeight,
-		UnbondingCompletionTime: v.UnbondingCompletionTime,
-		MinSelfDelegation:       v.MinSelfDelegation,
-		Commission:              v.Commission,
-	})
-}
-
-// UnmarshalJSON unmarshals the validator from JSON using Bech32
-func (v *Validator) UnmarshalJSON(data []byte) error {
-	bv := &bechValidator{}
-	if err := codec.Cdc.UnmarshalJSON(data, bv); err != nil {
-		return err
-	}
-	consPubKey, err := sdk.GetConsPubKeyBech32(bv.ConsPubKey)
-	if err != nil {
-		return err
-	}
-	*v = Validator{
-		OperatorAddress:         bv.OperatorAddress,
-		ConsPubKey:              consPubKey,
-		Jailed:                  bv.Jailed,
-		Tokens:                  bv.Tokens,
-		Status:                  bv.Status,
-		DelegatorShares:         bv.DelegatorShares,
-		Description:             bv.Description,
-		UnbondingHeight:         bv.UnbondingHeight,
-		UnbondingCompletionTime: bv.UnbondingCompletionTime,
-		Commission:              bv.Commission,
-		MinSelfDelegation:       bv.MinSelfDelegation,
-	}
-	return nil
-}
+//  // MarshalJSON marshals the validator to JSON using Bech32
+//  func (v Validator) MarshalJSON() ([]byte, error) {
+//  	bechConsPubKey, err := sdk.Bech32ifyConsPub(v.ConsPubKey)
+//  	if err != nil {
+//  		return nil, err
+//  	}
+//  
+//  	return codec.Cdc.MarshalJSON(bechValidator{
+//  		OperatorAddress:         v.OperatorAddress,
+//  		ConsPubKey:              bechConsPubKey,
+//  		Jailed:                  v.Jailed,
+//  		Status:                  v.Status,
+//  		Tokens:                  v.Tokens,
+//  		DelegatorShares:         v.DelegatorShares,
+//  		Description:             v.Description,
+//  		UnbondingHeight:         v.UnbondingHeight,
+//  		UnbondingCompletionTime: v.UnbondingCompletionTime,
+//  		MinSelfDelegation:       v.MinSelfDelegation,
+//  		Commission:              v.Commission,
+//  	})
+//  }
+//  
+//  // UnmarshalJSON unmarshals the validator from JSON using Bech32
+//  func (v *Validator) UnmarshalJSON(data []byte) error {
+//  	bv := &bechValidator{}
+//  	if err := codec.Cdc.UnmarshalJSON(data, bv); err != nil {
+//  		return err
+//  	}
+//  	consPubKey, err := sdk.GetConsPubKeyBech32(bv.ConsPubKey)
+//  	if err != nil {
+//  		return err
+//  	}
+//  	*v = Validator{
+//  		OperatorAddress:         bv.OperatorAddress,
+//  		ConsPubKey:              consPubKey,
+//  		Jailed:                  bv.Jailed,
+//  		Tokens:                  bv.Tokens,
+//  		Status:                  bv.Status,
+//  		DelegatorShares:         bv.DelegatorShares,
+//  		Description:             bv.Description,
+//  		UnbondingHeight:         bv.UnbondingHeight,
+//  		UnbondingCompletionTime: bv.UnbondingCompletionTime,
+//  		Commission:              bv.Commission,
+//  		MinSelfDelegation:       bv.MinSelfDelegation,
+//  	}
+//  	return nil
+//  }
 
 // only the vitals
 func (v Validator) TestEquivalent(v2 Validator) bool {

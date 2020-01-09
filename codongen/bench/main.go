@@ -9,7 +9,7 @@ import (
 
 	"github.com/cosmos/cosmos-sdk/codec"
 
-	codonCdc "github.com/cosmos/cosmos-sdk/codongen/codec"
+	codoncdc "github.com/cosmos/cosmos-sdk/codongen/codec"
 	"github.com/coinexchain/randsrc"
 )
 
@@ -22,11 +22,11 @@ func main() {
 	runBench(r)
 }
 
-func runBench(r codonCdc.RandSrc) {
-	objects := make([]codonCdc.MsgMultiSend, 1000)
+func runBench(r codoncdc.RandSrc) {
+	objects := make([]codoncdc.MsgMultiSend, 1000)
 	objectsJ := make([][]byte, 1000)
 	for i := 0; i < len(objects); i++ {
-		objects[i] = codonCdc.RandMsgMultiSend(r)
+		objects[i] = codoncdc.RandMsgMultiSend(r)
 		s, _ := json.Marshal(objects[i])
 		objectsJ[i] = s
 		//fmt.Printf("Here %s\n", s)
@@ -37,15 +37,15 @@ func runBench(r codonCdc.RandSrc) {
 	bzList := make([][]byte, 1000)
 	for i := 0; i < len(objects); i++ {
 		buf := make([]byte, 0, 1024)
-		codonCdc.EncodeAny(&buf, objects[i])
+		codoncdc.EncodeAny(&buf, objects[i])
 		if err != nil {
 			panic(err)
 		}
 		bzList[i] = buf
 	}
 	for i := 0; i < len(objects); i++ {
-		obj, _, err := codonCdc.DecodeAny(bzList[i])
-		v := obj.(codonCdc.MsgMultiSend)
+		obj, _, err := codoncdc.DecodeAny(bzList[i])
+		v := obj.(codoncdc.MsgMultiSend)
 		if err != nil {
 			panic(err)
 		}
@@ -92,11 +92,11 @@ func runBench(r codonCdc.RandSrc) {
 		}
 		for i := 0; i < len(objects); i++ {
 			bzList[i] = bzList[i][:0]
-			codonCdc.EncodeAny(&bzList[i], objects[i])
+			codoncdc.EncodeAny(&bzList[i], objects[i])
 			totalBytes += len(bzList[i])
 		}
 		for i := 0; i < len(objects); i++ {
-			_, _, err = codonCdc.DecodeAny(bzList[i])
+			_, _, err = codoncdc.DecodeAny(bzList[i])
 			if err != nil {
 				panic(err)
 			}
