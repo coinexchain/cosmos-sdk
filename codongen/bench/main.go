@@ -63,7 +63,10 @@ func runBench(r codonCdc.RandSrc) {
 	cdc := codec.New()
 	codec.RegisterCrypto(cdc)
 	nanoSecCount = time.Now().UnixNano()
-	for j := 0; j < 300; j++ {
+	for j := 0; j < 50; j++ {
+		if j%10 == 9 {
+			fmt.Printf("Now %d\n", j)
+		}
 		for i := 0; i < len(objects); i++ {
 			bzList[i], err = cdc.MarshalBinaryBare(objects[i])
 			totalBytes += len(bzList[i])
@@ -83,7 +86,10 @@ func runBench(r codonCdc.RandSrc) {
 
 	totalBytes = 0
 	nanoSecCount = time.Now().UnixNano()
-	for j := 0; j < 300; j++ {
+	for j := 0; j < 50; j++ {
+		if j%10 == 9 {
+			fmt.Printf("Now %d\n", j)
+		}
 		for i := 0; i < len(objects); i++ {
 			bzList[i] = bzList[i][:0]
 			codonCdc.EncodeAny(&bzList[i], objects[i])

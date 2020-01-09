@@ -77,56 +77,26 @@ func codonEncodeUint16(n int, w *[]byte, v uint16) {
 
 func codonEncodeByteSlice(n int, w *[]byte, v []byte) {
 	codonWriteUvarint(w, (uint64(n)<<3)|2)
-	codonWriteVarint(w, int64(len(v)))
+	codonWriteUvarint(w, uint64(len(v)))
 	*w = append(*w, v...)
 }
 func codonEncodeString(n int, w *[]byte, v string) {
 	codonEncodeByteSlice(n, w, []byte(v))
 }
 func codonDecodeBool(bz []byte, n *int, err *error) bool {
-	if len(bz) < 1 {
-		*err = errors.New("Not enough bytes to read")
-		return false
-	}
-	*n = 1
-	*err = nil
-	return bz[0]!=0
+	return codonDecodeInt64(bz, n, err) != 0
 }
-func codonDecodeInt(bz []byte, m *int, err *error) int {
-	i, n := binary.Varint(bz)
-	if n == 0 {
-		// buf too small
-		*err = errors.New("buffer too small")
-	} else if n < 0 {
-		// value larger than 64 bits (overflow)
-		// and -n is the number of bytes read
-		n = -n
-		*err = errors.New("EOF decoding varint")
-	}
-	*m = n
-	return int(i)
+func codonDecodeInt(bz []byte, n *int, err *error) int {
+	return int(codonDecodeInt64(bz, n, err))
 }
 func codonDecodeInt8(bz []byte, n *int, err *error) int8 {
-	if len(bz) < 1 {
-		*err = errors.New("Not enough bytes to read")
-		return 0
-	}
-	*err = nil
-	*n = 1
-	return int8(bz[0])
+	return int8(codonDecodeInt64(bz, n, err))
 }
 func codonDecodeInt16(bz []byte, n *int, err *error) int16 {
-	if len(bz) < 2 {
-		*err = errors.New("Not enough bytes to read")
-		return 0
-	}
-	*n = 2
-	*err = nil
-	return int16(binary.LittleEndian.Uint16(bz[:2]))
+	return int16(codonDecodeInt64(bz, n, err))
 }
 func codonDecodeInt32(bz []byte, n *int, err *error) int32 {
-	i := codonDecodeInt64(bz, n, err)
-	return int32(i)
+	return int32(codonDecodeInt64(bz, n, err))
 }
 func codonDecodeInt64(bz []byte, m *int, err *error) int64 {
 	i, n := binary.Varint(bz)
@@ -144,30 +114,16 @@ func codonDecodeInt64(bz []byte, m *int, err *error) int64 {
 	return int64(i)
 }
 func codonDecodeUint(bz []byte, n *int, err *error) uint {
-	i := codonDecodeUint64(bz, n, err)
-	return uint(i)
+	return uint(codonDecodeUint64(bz, n, err))
 }
 func codonDecodeUint8(bz []byte, n *int, err *error) uint8 {
-	if len(bz) < 1 {
-		*err = errors.New("Not enough bytes to read")
-		return 0
-	}
-	*n = 1
-	*err = nil
-	return uint8(bz[0])
+	return uint8(codonDecodeUint64(bz, n, err))
 }
 func codonDecodeUint16(bz []byte, n *int, err *error) uint16 {
-	if len(bz) < 2 {
-		*err = errors.New("Not enough bytes to read")
-		return 0
-	}
-	*n = 2
-	*err = nil
-	return uint16(binary.LittleEndian.Uint16(bz[:2]))
+	return uint16(codonDecodeUint64(bz, n, err))
 }
 func codonDecodeUint32(bz []byte, n *int, err *error) uint32 {
-	i := codonDecodeUint64(bz, n, err)
-	return uint32(i)
+	return uint32(codonDecodeUint64(bz, n, err))
 }
 func codonDecodeUint64(bz []byte, m *int, err *error) uint64 {
 	i, n := binary.Uvarint(bz)
@@ -212,9 +168,9 @@ func codonGetByteSlice(res *[]byte, bz []byte) (int, error) {
 	return n+int(length), nil
 }
 func codonDecodeString(bz []byte, n *int, err *error) string {
-	var res *[]byte
-	*n, *err = codonGetByteSlice(res, bz)
-	return string(*res)
+	var res []byte
+	*n, *err = codonGetByteSlice(&res, bz)
+	return string(res)
 }
 
 
@@ -234,18 +190,7 @@ func EncodeTime(t time.Time) []byte {
 	return buf[:n+m]
 }
 
-func DecodeTime(bz []byte) (t time.Time, m int, err error) {
-	var bs []byte
-	n, err := codonGetByteSlice(&bs, bz)
-	if err != nil {
-		return
-	}
-	t, m, err = DecodeTimeHelp(bs)
-	m += n
-	return
-}
-
-func DecodeTimeHelp(bz []byte) (time.Time, int, error) {
+func DecodeTime(bz []byte) (time.Time, int, error) {
 	sec, n := binary.Varint(bz)
 	var err error
 	if n == 0 {
@@ -314,29 +259,20 @@ func ByteSliceWithLengthPrefix(bz []byte) []byte {
 }
 
 func EncodeInt(v sdk.Int) []byte {
-	bz := v.BigInt().Bytes()
-	res := ByteSliceWithLengthPrefix(bz)
-
 	b := byte(0)
 	if v.BigInt().Sign() < 0 {
 		b = byte(1)
 	}
-	res = append(res, b)
-	return res
+	bz := v.BigInt().Bytes()
+	return append(bz, b)
 }
 
 func DecodeInt(bz []byte) (v sdk.Int, n int, err error) {
-	var bs []byte
-	n, err = codonGetByteSlice(&bs, bz)
-	if err != nil {
-		return
-	}
-	var k int
-	isNeg := codonDecodeBool(bz[n:], &k, &err)
-	n = n + 1
+	isNeg := bz[len(bz)-1] != 0
+	n = len(bz)
 	x := big.NewInt(0)
 	z := big.NewInt(0)
-	x.SetBytes(bs)
+	x.SetBytes(bz[:len(bz)-1])
 	if isNeg {
 		z.Neg(x)
 		v = sdk.NewIntFromBigInt(z)
@@ -360,31 +296,19 @@ func DeepCopyInt(i sdk.Int) sdk.Int {
 }
 
 func EncodeDec(v sdk.Dec) []byte {
-	bz := v.Int.Bytes()
-	res := ByteSliceWithLengthPrefix(bz)
-
 	b := byte(0)
 	if v.Int.Sign() < 0 {
 		b = byte(1)
 	}
-	res = append(res, b)
-	return res
+	bz := v.Int.Bytes()
+	return append(bz, b)
 }
 
 func DecodeDec(bz []byte) (v sdk.Dec, n int, err error) {
-	var bs []byte
-	n, err = codonGetByteSlice(&bs, bz)
-	if err != nil {
-		return
-	}
-	var k int
-	isNeg := codonDecodeBool(bz[n:], &k, &err)
-	n = n + 1
-	if err != nil {
-		return
-	}
+	isNeg := bz[len(bz)-1] != 0
+	n = len(bz)
 	v = sdk.ZeroDec()
-	v.Int.SetBytes(bs)
+	v.Int.SetBytes(bz[:len(bz)-1])
 	if isNeg {
 		v.Int.Neg(v.Int)
 	}
@@ -404,7 +328,6 @@ func RandDec(r RandSrc) sdk.Dec {
 func DeepCopyDec(d sdk.Dec) sdk.Dec {
 	return d.MulInt64(1)
 }
-
 
 
 // ========= BridgeBegin ============
@@ -1001,11 +924,25 @@ if err != nil {return}
 bz = bz[n:]
 total+=n
 case 1: // v.PubKeys
+l := codonDecodeUint64(bz, &n, &err)
+	if err != nil {
+		return
+	}
+	bz = bz[n:]
+	total += n
+	if int(l) > len(bz) {
+		err = errors.New("Length Too Large")
+		return
+	}
 var tmp PubKey
-tmp, n, err = DecodePubKey(bz)
+tmp, n, err = DecodePubKey(bz[:l])
 if err != nil {return}
 bz = bz[n:]
 total+=n
+if int(l) != n {
+		err = errors.New("Length Mismatch")
+		return
+	}
 v.PubKeys = append(v.PubKeys, tmp)
 default: err = errors.New("Unknown Field")
 return
@@ -1227,10 +1164,24 @@ if err != nil {return}
 bz = bz[l:]
 n += int(l)
 case 4: // v.Timestamp
-v.Timestamp, n, err = DecodeTime(bz)
+l := codonDecodeUint64(bz, &n, &err)
+	if err != nil {
+		return
+	}
+	bz = bz[n:]
+	total += n
+	if int(l) > len(bz) {
+		err = errors.New("Length Too Large")
+		return
+	}
+v.Timestamp, n, err = DecodeTime(bz[:l])
 if err != nil {return}
 bz = bz[n:]
 total+=n
+if int(l) != n {
+		err = errors.New("Length Mismatch")
+		return
+	}
 case 5: // v.ValidatorAddress
 var tmpBz []byte
 n, err = codonGetByteSlice(&tmpBz, bz)
@@ -1331,10 +1282,24 @@ total+=n
 tag = tag >> 3
 switch tag {
 case 0:
-v, n, err = DecodeInt(bz)
+l := codonDecodeUint64(bz, &n, &err)
+	if err != nil {
+		return
+	}
+	bz = bz[n:]
+	total += n
+	if int(l) > len(bz) {
+		err = errors.New("Length Too Large")
+		return
+	}
+v, n, err = DecodeInt(bz[:l])
 if err != nil {return}
 bz = bz[n:]
 total+=n
+if int(l) != n {
+		err = errors.New("Length Mismatch")
+		return
+	}
 default: err = errors.New("Unknown Field")
 return
 }
@@ -1368,10 +1333,24 @@ total+=n
 tag = tag >> 3
 switch tag {
 case 0:
-v, n, err = DecodeDec(bz)
+l := codonDecodeUint64(bz, &n, &err)
+	if err != nil {
+		return
+	}
+	bz = bz[n:]
+	total += n
+	if int(l) > len(bz) {
+		err = errors.New("Length Too Large")
+		return
+	}
+v, n, err = DecodeDec(bz[:l])
 if err != nil {return}
 bz = bz[n:]
 total+=n
+if int(l) != n {
+		err = errors.New("Length Mismatch")
+		return
+	}
 default: err = errors.New("Unknown Field")
 return
 }
@@ -1532,10 +1511,24 @@ if err != nil {return}
 bz = bz[n:]
 total+=n
 case 1: // v.Amount
-v.Amount, n, err = DecodeInt(bz)
+l := codonDecodeUint64(bz, &n, &err)
+	if err != nil {
+		return
+	}
+	bz = bz[n:]
+	total += n
+	if int(l) > len(bz) {
+		err = errors.New("Length Too Large")
+		return
+	}
+v.Amount, n, err = DecodeInt(bz[:l])
 if err != nil {return}
 bz = bz[n:]
 total+=n
+if int(l) != n {
+		err = errors.New("Length Mismatch")
+		return
+	}
 default: err = errors.New("Unknown Field")
 return
 }
@@ -1577,10 +1570,24 @@ if err != nil {return}
 bz = bz[n:]
 total+=n
 case 1: // v.Amount
-v.Amount, n, err = DecodeDec(bz)
+l := codonDecodeUint64(bz, &n, &err)
+	if err != nil {
+		return
+	}
+	bz = bz[n:]
+	total += n
+	if int(l) > len(bz) {
+		err = errors.New("Length Too Large")
+		return
+	}
+v.Amount, n, err = DecodeDec(bz[:l])
 if err != nil {return}
 bz = bz[n:]
 total+=n
+if int(l) != n {
+		err = errors.New("Length Mismatch")
+		return
+	}
 default: err = errors.New("Unknown Field")
 return
 }
@@ -1621,10 +1628,24 @@ total+=n
 tag = tag >> 3
 switch tag {
 case 0: // v.PubKey
-v.PubKey, n, err = DecodePubKey(bz)
+l := codonDecodeUint64(bz, &n, &err)
+	if err != nil {
+		return
+	}
+	bz = bz[n:]
+	total += n
+	if int(l) > len(bz) {
+		err = errors.New("Length Too Large")
+		return
+	}
+v.PubKey, n, err = DecodePubKey(bz[:l])
 if err != nil {return}
 bz = bz[n:]
 total+=n // interface_decode
+if int(l) != n {
+		err = errors.New("Length Mismatch")
+		return
+	}
 case 1: // v.Signature
 var tmpBz []byte
 n, err = codonGetByteSlice(&tmpBz, bz)
@@ -1752,11 +1773,25 @@ bz = bz[n:]
 total+=n
 v.Address = tmpBz
 case 1: // v.Coins
+l := codonDecodeUint64(bz, &n, &err)
+	if err != nil {
+		return
+	}
+	bz = bz[n:]
+	total += n
+	if int(l) > len(bz) {
+		err = errors.New("Length Too Large")
+		return
+	}
 var tmp Coin
-tmp, n, err = DecodeCoin(bz)
+tmp, n, err = DecodeCoin(bz[:l])
 if err != nil {return}
 bz = bz[n:]
 total+=n
+if int(l) != n {
+		err = errors.New("Length Mismatch")
+		return
+	}
 v.Coins = append(v.Coins, tmp)
 default: err = errors.New("Unknown Field")
 return
@@ -1831,11 +1866,25 @@ bz = bz[n:]
 total+=n
 v.Address = tmpBz
 case 1: // v.Coins
+l := codonDecodeUint64(bz, &n, &err)
+	if err != nil {
+		return
+	}
+	bz = bz[n:]
+	total += n
+	if int(l) > len(bz) {
+		err = errors.New("Length Too Large")
+		return
+	}
 var tmp Coin
-tmp, n, err = DecodeCoin(bz)
+tmp, n, err = DecodeCoin(bz[:l])
 if err != nil {return}
 bz = bz[n:]
 total+=n
+if int(l) != n {
+		err = errors.New("Length Mismatch")
+		return
+	}
 v.Coins = append(v.Coins, tmp)
 default: err = errors.New("Unknown Field")
 return
@@ -1964,17 +2013,45 @@ bz = bz[n:]
 total+=n
 v.Address = tmpBz
 case 1: // v.Coins
+l := codonDecodeUint64(bz, &n, &err)
+	if err != nil {
+		return
+	}
+	bz = bz[n:]
+	total += n
+	if int(l) > len(bz) {
+		err = errors.New("Length Too Large")
+		return
+	}
 var tmp Coin
-tmp, n, err = DecodeCoin(bz)
+tmp, n, err = DecodeCoin(bz[:l])
 if err != nil {return}
 bz = bz[n:]
 total+=n
+if int(l) != n {
+		err = errors.New("Length Mismatch")
+		return
+	}
 v.Coins = append(v.Coins, tmp)
 case 2: // v.PubKey
-v.PubKey, n, err = DecodePubKey(bz)
+l := codonDecodeUint64(bz, &n, &err)
+	if err != nil {
+		return
+	}
+	bz = bz[n:]
+	total += n
+	if int(l) > len(bz) {
+		err = errors.New("Length Too Large")
+		return
+	}
+v.PubKey, n, err = DecodePubKey(bz[:l])
 if err != nil {return}
 bz = bz[n:]
 total+=n // interface_decode
+if int(l) != n {
+		err = errors.New("Length Mismatch")
+		return
+	}
 case 3: // v.AccountNumber
 v.AccountNumber = uint64(codonDecodeUint64(bz, &n, &err))
 if err != nil {return}
@@ -2118,17 +2195,45 @@ bz = bz[n:]
 total+=n
 v.BaseAccount.Address = tmpBz
 case 1: // v.BaseAccount.Coins
+l := codonDecodeUint64(bz, &n, &err)
+	if err != nil {
+		return
+	}
+	bz = bz[n:]
+	total += n
+	if int(l) > len(bz) {
+		err = errors.New("Length Too Large")
+		return
+	}
 var tmp Coin
-tmp, n, err = DecodeCoin(bz)
+tmp, n, err = DecodeCoin(bz[:l])
 if err != nil {return}
 bz = bz[n:]
 total+=n
+if int(l) != n {
+		err = errors.New("Length Mismatch")
+		return
+	}
 v.BaseAccount.Coins = append(v.BaseAccount.Coins, tmp)
 case 2: // v.BaseAccount.PubKey
-v.BaseAccount.PubKey, n, err = DecodePubKey(bz)
+l := codonDecodeUint64(bz, &n, &err)
+	if err != nil {
+		return
+	}
+	bz = bz[n:]
+	total += n
+	if int(l) > len(bz) {
+		err = errors.New("Length Too Large")
+		return
+	}
+v.BaseAccount.PubKey, n, err = DecodePubKey(bz[:l])
 if err != nil {return}
 bz = bz[n:]
 total+=n // interface_decode
+if int(l) != n {
+		err = errors.New("Length Mismatch")
+		return
+	}
 case 3: // v.BaseAccount.AccountNumber
 v.BaseAccount.AccountNumber = uint64(codonDecodeUint64(bz, &n, &err))
 if err != nil {return}
@@ -2148,25 +2253,67 @@ if err != nil {return}
 bz = bz[l:]
 n += int(l)
 case 1: // v.OriginalVesting
+l := codonDecodeUint64(bz, &n, &err)
+	if err != nil {
+		return
+	}
+	bz = bz[n:]
+	total += n
+	if int(l) > len(bz) {
+		err = errors.New("Length Too Large")
+		return
+	}
 var tmp Coin
-tmp, n, err = DecodeCoin(bz)
+tmp, n, err = DecodeCoin(bz[:l])
 if err != nil {return}
 bz = bz[n:]
 total+=n
+if int(l) != n {
+		err = errors.New("Length Mismatch")
+		return
+	}
 v.OriginalVesting = append(v.OriginalVesting, tmp)
 case 2: // v.DelegatedFree
+l := codonDecodeUint64(bz, &n, &err)
+	if err != nil {
+		return
+	}
+	bz = bz[n:]
+	total += n
+	if int(l) > len(bz) {
+		err = errors.New("Length Too Large")
+		return
+	}
 var tmp Coin
-tmp, n, err = DecodeCoin(bz)
+tmp, n, err = DecodeCoin(bz[:l])
 if err != nil {return}
 bz = bz[n:]
 total+=n
+if int(l) != n {
+		err = errors.New("Length Mismatch")
+		return
+	}
 v.DelegatedFree = append(v.DelegatedFree, tmp)
 case 3: // v.DelegatedVesting
+l := codonDecodeUint64(bz, &n, &err)
+	if err != nil {
+		return
+	}
+	bz = bz[n:]
+	total += n
+	if int(l) > len(bz) {
+		err = errors.New("Length Too Large")
+		return
+	}
 var tmp Coin
-tmp, n, err = DecodeCoin(bz)
+tmp, n, err = DecodeCoin(bz[:l])
 if err != nil {return}
 bz = bz[n:]
 total+=n
+if int(l) != n {
+		err = errors.New("Length Mismatch")
+		return
+	}
 v.DelegatedVesting = append(v.DelegatedVesting, tmp)
 case 4: // v.EndTime
 v.EndTime = int64(codonDecodeInt64(bz, &n, &err))
@@ -2380,17 +2527,45 @@ bz = bz[n:]
 total+=n
 v.BaseVestingAccount.BaseAccount.Address = tmpBz
 case 1: // v.BaseVestingAccount.BaseAccount.Coins
+l := codonDecodeUint64(bz, &n, &err)
+	if err != nil {
+		return
+	}
+	bz = bz[n:]
+	total += n
+	if int(l) > len(bz) {
+		err = errors.New("Length Too Large")
+		return
+	}
 var tmp Coin
-tmp, n, err = DecodeCoin(bz)
+tmp, n, err = DecodeCoin(bz[:l])
 if err != nil {return}
 bz = bz[n:]
 total+=n
+if int(l) != n {
+		err = errors.New("Length Mismatch")
+		return
+	}
 v.BaseVestingAccount.BaseAccount.Coins = append(v.BaseVestingAccount.BaseAccount.Coins, tmp)
 case 2: // v.BaseVestingAccount.BaseAccount.PubKey
-v.BaseVestingAccount.BaseAccount.PubKey, n, err = DecodePubKey(bz)
+l := codonDecodeUint64(bz, &n, &err)
+	if err != nil {
+		return
+	}
+	bz = bz[n:]
+	total += n
+	if int(l) > len(bz) {
+		err = errors.New("Length Too Large")
+		return
+	}
+v.BaseVestingAccount.BaseAccount.PubKey, n, err = DecodePubKey(bz[:l])
 if err != nil {return}
 bz = bz[n:]
 total+=n // interface_decode
+if int(l) != n {
+		err = errors.New("Length Mismatch")
+		return
+	}
 case 3: // v.BaseVestingAccount.BaseAccount.AccountNumber
 v.BaseVestingAccount.BaseAccount.AccountNumber = uint64(codonDecodeUint64(bz, &n, &err))
 if err != nil {return}
@@ -2410,25 +2585,67 @@ if err != nil {return}
 bz = bz[l:]
 n += int(l)
 case 1: // v.BaseVestingAccount.OriginalVesting
+l := codonDecodeUint64(bz, &n, &err)
+	if err != nil {
+		return
+	}
+	bz = bz[n:]
+	total += n
+	if int(l) > len(bz) {
+		err = errors.New("Length Too Large")
+		return
+	}
 var tmp Coin
-tmp, n, err = DecodeCoin(bz)
+tmp, n, err = DecodeCoin(bz[:l])
 if err != nil {return}
 bz = bz[n:]
 total+=n
+if int(l) != n {
+		err = errors.New("Length Mismatch")
+		return
+	}
 v.BaseVestingAccount.OriginalVesting = append(v.BaseVestingAccount.OriginalVesting, tmp)
 case 2: // v.BaseVestingAccount.DelegatedFree
+l := codonDecodeUint64(bz, &n, &err)
+	if err != nil {
+		return
+	}
+	bz = bz[n:]
+	total += n
+	if int(l) > len(bz) {
+		err = errors.New("Length Too Large")
+		return
+	}
 var tmp Coin
-tmp, n, err = DecodeCoin(bz)
+tmp, n, err = DecodeCoin(bz[:l])
 if err != nil {return}
 bz = bz[n:]
 total+=n
+if int(l) != n {
+		err = errors.New("Length Mismatch")
+		return
+	}
 v.BaseVestingAccount.DelegatedFree = append(v.BaseVestingAccount.DelegatedFree, tmp)
 case 3: // v.BaseVestingAccount.DelegatedVesting
+l := codonDecodeUint64(bz, &n, &err)
+	if err != nil {
+		return
+	}
+	bz = bz[n:]
+	total += n
+	if int(l) > len(bz) {
+		err = errors.New("Length Too Large")
+		return
+	}
 var tmp Coin
-tmp, n, err = DecodeCoin(bz)
+tmp, n, err = DecodeCoin(bz[:l])
 if err != nil {return}
 bz = bz[n:]
 total+=n
+if int(l) != n {
+		err = errors.New("Length Mismatch")
+		return
+	}
 v.BaseVestingAccount.DelegatedVesting = append(v.BaseVestingAccount.DelegatedVesting, tmp)
 case 4: // v.BaseVestingAccount.EndTime
 v.BaseVestingAccount.EndTime = int64(codonDecodeInt64(bz, &n, &err))
@@ -2660,17 +2877,45 @@ bz = bz[n:]
 total+=n
 v.BaseVestingAccount.BaseAccount.Address = tmpBz
 case 1: // v.BaseVestingAccount.BaseAccount.Coins
+l := codonDecodeUint64(bz, &n, &err)
+	if err != nil {
+		return
+	}
+	bz = bz[n:]
+	total += n
+	if int(l) > len(bz) {
+		err = errors.New("Length Too Large")
+		return
+	}
 var tmp Coin
-tmp, n, err = DecodeCoin(bz)
+tmp, n, err = DecodeCoin(bz[:l])
 if err != nil {return}
 bz = bz[n:]
 total+=n
+if int(l) != n {
+		err = errors.New("Length Mismatch")
+		return
+	}
 v.BaseVestingAccount.BaseAccount.Coins = append(v.BaseVestingAccount.BaseAccount.Coins, tmp)
 case 2: // v.BaseVestingAccount.BaseAccount.PubKey
-v.BaseVestingAccount.BaseAccount.PubKey, n, err = DecodePubKey(bz)
+l := codonDecodeUint64(bz, &n, &err)
+	if err != nil {
+		return
+	}
+	bz = bz[n:]
+	total += n
+	if int(l) > len(bz) {
+		err = errors.New("Length Too Large")
+		return
+	}
+v.BaseVestingAccount.BaseAccount.PubKey, n, err = DecodePubKey(bz[:l])
 if err != nil {return}
 bz = bz[n:]
 total+=n // interface_decode
+if int(l) != n {
+		err = errors.New("Length Mismatch")
+		return
+	}
 case 3: // v.BaseVestingAccount.BaseAccount.AccountNumber
 v.BaseVestingAccount.BaseAccount.AccountNumber = uint64(codonDecodeUint64(bz, &n, &err))
 if err != nil {return}
@@ -2690,25 +2935,67 @@ if err != nil {return}
 bz = bz[l:]
 n += int(l)
 case 1: // v.BaseVestingAccount.OriginalVesting
+l := codonDecodeUint64(bz, &n, &err)
+	if err != nil {
+		return
+	}
+	bz = bz[n:]
+	total += n
+	if int(l) > len(bz) {
+		err = errors.New("Length Too Large")
+		return
+	}
 var tmp Coin
-tmp, n, err = DecodeCoin(bz)
+tmp, n, err = DecodeCoin(bz[:l])
 if err != nil {return}
 bz = bz[n:]
 total+=n
+if int(l) != n {
+		err = errors.New("Length Mismatch")
+		return
+	}
 v.BaseVestingAccount.OriginalVesting = append(v.BaseVestingAccount.OriginalVesting, tmp)
 case 2: // v.BaseVestingAccount.DelegatedFree
+l := codonDecodeUint64(bz, &n, &err)
+	if err != nil {
+		return
+	}
+	bz = bz[n:]
+	total += n
+	if int(l) > len(bz) {
+		err = errors.New("Length Too Large")
+		return
+	}
 var tmp Coin
-tmp, n, err = DecodeCoin(bz)
+tmp, n, err = DecodeCoin(bz[:l])
 if err != nil {return}
 bz = bz[n:]
 total+=n
+if int(l) != n {
+		err = errors.New("Length Mismatch")
+		return
+	}
 v.BaseVestingAccount.DelegatedFree = append(v.BaseVestingAccount.DelegatedFree, tmp)
 case 3: // v.BaseVestingAccount.DelegatedVesting
+l := codonDecodeUint64(bz, &n, &err)
+	if err != nil {
+		return
+	}
+	bz = bz[n:]
+	total += n
+	if int(l) > len(bz) {
+		err = errors.New("Length Too Large")
+		return
+	}
 var tmp Coin
-tmp, n, err = DecodeCoin(bz)
+tmp, n, err = DecodeCoin(bz[:l])
 if err != nil {return}
 bz = bz[n:]
 total+=n
+if int(l) != n {
+		err = errors.New("Length Mismatch")
+		return
+	}
 v.BaseVestingAccount.DelegatedVesting = append(v.BaseVestingAccount.DelegatedVesting, tmp)
 case 4: // v.BaseVestingAccount.EndTime
 v.BaseVestingAccount.EndTime = int64(codonDecodeInt64(bz, &n, &err))
@@ -2890,17 +3177,45 @@ bz = bz[n:]
 total+=n
 v.BaseAccount.Address = tmpBz
 case 1: // v.BaseAccount.Coins
+l := codonDecodeUint64(bz, &n, &err)
+	if err != nil {
+		return
+	}
+	bz = bz[n:]
+	total += n
+	if int(l) > len(bz) {
+		err = errors.New("Length Too Large")
+		return
+	}
 var tmp Coin
-tmp, n, err = DecodeCoin(bz)
+tmp, n, err = DecodeCoin(bz[:l])
 if err != nil {return}
 bz = bz[n:]
 total+=n
+if int(l) != n {
+		err = errors.New("Length Mismatch")
+		return
+	}
 v.BaseAccount.Coins = append(v.BaseAccount.Coins, tmp)
 case 2: // v.BaseAccount.PubKey
-v.BaseAccount.PubKey, n, err = DecodePubKey(bz)
+l := codonDecodeUint64(bz, &n, &err)
+	if err != nil {
+		return
+	}
+	bz = bz[n:]
+	total += n
+	if int(l) > len(bz) {
+		err = errors.New("Length Too Large")
+		return
+	}
+v.BaseAccount.PubKey, n, err = DecodePubKey(bz[:l])
 if err != nil {return}
 bz = bz[n:]
 total+=n // interface_decode
+if int(l) != n {
+		err = errors.New("Length Mismatch")
+		return
+	}
 case 3: // v.BaseAccount.AccountNumber
 v.BaseAccount.AccountNumber = uint64(codonDecodeUint64(bz, &n, &err))
 if err != nil {return}
@@ -3051,11 +3366,25 @@ total+=n
 tag = tag >> 3
 switch tag {
 case 0: // v.Msgs
+l := codonDecodeUint64(bz, &n, &err)
+	if err != nil {
+		return
+	}
+	bz = bz[n:]
+	total += n
+	if int(l) > len(bz) {
+		err = errors.New("Length Too Large")
+		return
+	}
 var tmp Msg
-tmp, n, err = DecodeMsg(bz)
+tmp, n, err = DecodeMsg(bz[:l])
 if err != nil {return}
 bz = bz[n:]
 total+=n
+if int(l) != n {
+		err = errors.New("Length Mismatch")
+		return
+	}
 v.Msgs = append(v.Msgs, tmp)
 case 1: // v.Fee
 l := codonDecodeUint64(bz, &n, &err)
@@ -3071,11 +3400,25 @@ total+=n
 tag = tag >> 3
 switch tag {
 case 0: // v.Fee.Amount
+l := codonDecodeUint64(bz, &n, &err)
+	if err != nil {
+		return
+	}
+	bz = bz[n:]
+	total += n
+	if int(l) > len(bz) {
+		err = errors.New("Length Too Large")
+		return
+	}
 var tmp Coin
-tmp, n, err = DecodeCoin(bz)
+tmp, n, err = DecodeCoin(bz[:l])
 if err != nil {return}
 bz = bz[n:]
 total+=n
+if int(l) != n {
+		err = errors.New("Length Mismatch")
+		return
+	}
 v.Fee.Amount = append(v.Fee.Amount, tmp)
 case 1: // v.Fee.Gas
 v.Fee.Gas = uint64(codonDecodeUint64(bz, &n, &err))
@@ -3091,11 +3434,25 @@ if err != nil {return}
 bz = bz[l:]
 n += int(l)
 case 2: // v.Signatures
+l := codonDecodeUint64(bz, &n, &err)
+	if err != nil {
+		return
+	}
+	bz = bz[n:]
+	total += n
+	if int(l) > len(bz) {
+		err = errors.New("Length Too Large")
+		return
+	}
 var tmp StdSignature
-tmp, n, err = DecodeStdSignature(bz)
+tmp, n, err = DecodeStdSignature(bz[:l])
 if err != nil {return}
 bz = bz[n:]
 total+=n
+if int(l) != n {
+		err = errors.New("Length Mismatch")
+		return
+	}
 v.Signatures = append(v.Signatures, tmp)
 case 3: // v.Memo
 v.Memo = string(codonDecodeString(bz, &n, &err))
@@ -3237,10 +3594,24 @@ if err != nil {return}
 bz = bz[n:]
 total+=n
 case 1: // v.Amount.Amount
-v.Amount.Amount, n, err = DecodeInt(bz)
+l := codonDecodeUint64(bz, &n, &err)
+	if err != nil {
+		return
+	}
+	bz = bz[n:]
+	total += n
+	if int(l) > len(bz) {
+		err = errors.New("Length Too Large")
+		return
+	}
+v.Amount.Amount, n, err = DecodeInt(bz[:l])
 if err != nil {return}
 bz = bz[n:]
 total+=n
+if int(l) != n {
+		err = errors.New("Length Mismatch")
+		return
+	}
 default: err = errors.New("Unknown Field")
 return
 }
@@ -3397,20 +3768,62 @@ total+=n
 tag = tag >> 3
 switch tag {
 case 0: // v.Commission.Rate
-v.Commission.Rate, n, err = DecodeDec(bz)
+l := codonDecodeUint64(bz, &n, &err)
+	if err != nil {
+		return
+	}
+	bz = bz[n:]
+	total += n
+	if int(l) > len(bz) {
+		err = errors.New("Length Too Large")
+		return
+	}
+v.Commission.Rate, n, err = DecodeDec(bz[:l])
 if err != nil {return}
 bz = bz[n:]
 total+=n
+if int(l) != n {
+		err = errors.New("Length Mismatch")
+		return
+	}
 case 1: // v.Commission.MaxRate
-v.Commission.MaxRate, n, err = DecodeDec(bz)
+l := codonDecodeUint64(bz, &n, &err)
+	if err != nil {
+		return
+	}
+	bz = bz[n:]
+	total += n
+	if int(l) > len(bz) {
+		err = errors.New("Length Too Large")
+		return
+	}
+v.Commission.MaxRate, n, err = DecodeDec(bz[:l])
 if err != nil {return}
 bz = bz[n:]
 total+=n
+if int(l) != n {
+		err = errors.New("Length Mismatch")
+		return
+	}
 case 2: // v.Commission.MaxChangeRate
-v.Commission.MaxChangeRate, n, err = DecodeDec(bz)
+l := codonDecodeUint64(bz, &n, &err)
+	if err != nil {
+		return
+	}
+	bz = bz[n:]
+	total += n
+	if int(l) > len(bz) {
+		err = errors.New("Length Too Large")
+		return
+	}
+v.Commission.MaxChangeRate, n, err = DecodeDec(bz[:l])
 if err != nil {return}
 bz = bz[n:]
 total+=n
+if int(l) != n {
+		err = errors.New("Length Mismatch")
+		return
+	}
 default: err = errors.New("Unknown Field")
 return
 }
@@ -3420,10 +3833,24 @@ if err != nil {return}
 bz = bz[l:]
 n += int(l)
 case 2: // v.MinSelfDelegation
-v.MinSelfDelegation, n, err = DecodeInt(bz)
+l := codonDecodeUint64(bz, &n, &err)
+	if err != nil {
+		return
+	}
+	bz = bz[n:]
+	total += n
+	if int(l) > len(bz) {
+		err = errors.New("Length Too Large")
+		return
+	}
+v.MinSelfDelegation, n, err = DecodeInt(bz[:l])
 if err != nil {return}
 bz = bz[n:]
 total+=n
+if int(l) != n {
+		err = errors.New("Length Mismatch")
+		return
+	}
 case 3: // v.DelegatorAddress
 var tmpBz []byte
 n, err = codonGetByteSlice(&tmpBz, bz)
@@ -3439,10 +3866,24 @@ bz = bz[n:]
 total+=n
 v.ValidatorAddress = tmpBz
 case 5: // v.PubKey
-v.PubKey, n, err = DecodePubKey(bz)
+l := codonDecodeUint64(bz, &n, &err)
+	if err != nil {
+		return
+	}
+	bz = bz[n:]
+	total += n
+	if int(l) > len(bz) {
+		err = errors.New("Length Too Large")
+		return
+	}
+v.PubKey, n, err = DecodePubKey(bz[:l])
 if err != nil {return}
 bz = bz[n:]
 total+=n // interface_decode
+if int(l) != n {
+		err = errors.New("Length Mismatch")
+		return
+	}
 case 6: // v.Value
 l := codonDecodeUint64(bz, &n, &err)
 if err != nil {return}
@@ -3462,10 +3903,24 @@ if err != nil {return}
 bz = bz[n:]
 total+=n
 case 1: // v.Value.Amount
-v.Value.Amount, n, err = DecodeInt(bz)
+l := codonDecodeUint64(bz, &n, &err)
+	if err != nil {
+		return
+	}
+	bz = bz[n:]
+	total += n
+	if int(l) > len(bz) {
+		err = errors.New("Length Too Large")
+		return
+	}
+v.Value.Amount, n, err = DecodeInt(bz[:l])
 if err != nil {return}
 bz = bz[n:]
 total+=n
+if int(l) != n {
+		err = errors.New("Length Mismatch")
+		return
+	}
 default: err = errors.New("Unknown Field")
 return
 }
@@ -3591,10 +4046,24 @@ if err != nil {return}
 bz = bz[n:]
 total+=n
 case 1: // v.Amount.Amount
-v.Amount.Amount, n, err = DecodeInt(bz)
+l := codonDecodeUint64(bz, &n, &err)
+	if err != nil {
+		return
+	}
+	bz = bz[n:]
+	total += n
+	if int(l) > len(bz) {
+		err = errors.New("Length Too Large")
+		return
+	}
+v.Amount.Amount, n, err = DecodeInt(bz[:l])
 if err != nil {return}
 bz = bz[n:]
 total+=n
+if int(l) != n {
+		err = errors.New("Length Mismatch")
+		return
+	}
 default: err = errors.New("Unknown Field")
 return
 }
@@ -3717,17 +4186,45 @@ bz = bz[n:]
 total+=n
 v.ValidatorAddress = tmpBz
 case 2: // v.CommissionRate
+l := codonDecodeUint64(bz, &n, &err)
+	if err != nil {
+		return
+	}
+	bz = bz[n:]
+	total += n
+	if int(l) > len(bz) {
+		err = errors.New("Length Too Large")
+		return
+	}
 v.CommissionRate = &SdkDec{}
-*(v.CommissionRate), n, err = DecodeDec(bz)
+*(v.CommissionRate), n, err = DecodeDec(bz[:l])
 if err != nil {return}
 bz = bz[n:]
 total+=n
+if int(l) != n {
+		err = errors.New("Length Mismatch")
+		return
+	}
 case 3: // v.MinSelfDelegation
+l := codonDecodeUint64(bz, &n, &err)
+	if err != nil {
+		return
+	}
+	bz = bz[n:]
+	total += n
+	if int(l) > len(bz) {
+		err = errors.New("Length Too Large")
+		return
+	}
 v.MinSelfDelegation = &SdkInt{}
-*(v.MinSelfDelegation), n, err = DecodeInt(bz)
+*(v.MinSelfDelegation), n, err = DecodeInt(bz[:l])
 if err != nil {return}
 bz = bz[n:]
 total+=n
+if int(l) != n {
+		err = errors.New("Length Mismatch")
+		return
+	}
 default: err = errors.New("Unknown Field")
 return
 }
@@ -3890,10 +4387,24 @@ if err != nil {return}
 bz = bz[n:]
 total+=n
 case 1: // v.Amount.Amount
-v.Amount.Amount, n, err = DecodeInt(bz)
+l := codonDecodeUint64(bz, &n, &err)
+	if err != nil {
+		return
+	}
+	bz = bz[n:]
+	total += n
+	if int(l) > len(bz) {
+		err = errors.New("Length Too Large")
+		return
+	}
+v.Amount.Amount, n, err = DecodeInt(bz[:l])
 if err != nil {return}
 bz = bz[n:]
 total+=n
+if int(l) != n {
+		err = errors.New("Length Mismatch")
+		return
+	}
 default: err = errors.New("Unknown Field")
 return
 }
@@ -4136,11 +4647,25 @@ bz = bz[n:]
 total+=n
 v.Depositor = tmpBz
 case 2: // v.Amount
+l := codonDecodeUint64(bz, &n, &err)
+	if err != nil {
+		return
+	}
+	bz = bz[n:]
+	total += n
+	if int(l) > len(bz) {
+		err = errors.New("Length Too Large")
+		return
+	}
 var tmp Coin
-tmp, n, err = DecodeCoin(bz)
+tmp, n, err = DecodeCoin(bz[:l])
 if err != nil {return}
 bz = bz[n:]
 total+=n
+if int(l) != n {
+		err = errors.New("Length Mismatch")
+		return
+	}
 v.Amount = append(v.Amount, tmp)
 default: err = errors.New("Unknown Field")
 return
@@ -4286,11 +4811,25 @@ if err != nil {return}
 bz = bz[n:]
 total+=n
 case 2: // v.Changes
+l := codonDecodeUint64(bz, &n, &err)
+	if err != nil {
+		return
+	}
+	bz = bz[n:]
+	total += n
+	if int(l) > len(bz) {
+		err = errors.New("Length Too Large")
+		return
+	}
 var tmp ParamChange
-tmp, n, err = DecodeParamChange(bz)
+tmp, n, err = DecodeParamChange(bz[:l])
 if err != nil {return}
 bz = bz[n:]
 total+=n
+if int(l) != n {
+		err = errors.New("Length Mismatch")
+		return
+	}
 v.Changes = append(v.Changes, tmp)
 default: err = errors.New("Unknown Field")
 return
@@ -4463,11 +5002,25 @@ bz = bz[n:]
 total+=n
 v.Recipient = tmpBz
 case 3: // v.Amount
+l := codonDecodeUint64(bz, &n, &err)
+	if err != nil {
+		return
+	}
+	bz = bz[n:]
+	total += n
+	if int(l) > len(bz) {
+		err = errors.New("Length Too Large")
+		return
+	}
 var tmp Coin
-tmp, n, err = DecodeCoin(bz)
+tmp, n, err = DecodeCoin(bz[:l])
 if err != nil {return}
 bz = bz[n:]
 total+=n
+if int(l) != n {
+		err = errors.New("Length Mismatch")
+		return
+	}
 v.Amount = append(v.Amount, tmp)
 default: err = errors.New("Unknown Field")
 return
@@ -4563,18 +5116,46 @@ total+=n
 tag = tag >> 3
 switch tag {
 case 0: // v.Inputs
+l := codonDecodeUint64(bz, &n, &err)
+	if err != nil {
+		return
+	}
+	bz = bz[n:]
+	total += n
+	if int(l) > len(bz) {
+		err = errors.New("Length Too Large")
+		return
+	}
 var tmp Input
-tmp, n, err = DecodeInput(bz)
+tmp, n, err = DecodeInput(bz[:l])
 if err != nil {return}
 bz = bz[n:]
 total+=n
+if int(l) != n {
+		err = errors.New("Length Mismatch")
+		return
+	}
 v.Inputs = append(v.Inputs, tmp)
 case 1: // v.Outputs
+l := codonDecodeUint64(bz, &n, &err)
+	if err != nil {
+		return
+	}
+	bz = bz[n:]
+	total += n
+	if int(l) > len(bz) {
+		err = errors.New("Length Too Large")
+		return
+	}
 var tmp Output
-tmp, n, err = DecodeOutput(bz)
+tmp, n, err = DecodeOutput(bz[:l])
 if err != nil {return}
 bz = bz[n:]
 total+=n
+if int(l) != n {
+		err = errors.New("Length Mismatch")
+		return
+	}
 v.Outputs = append(v.Outputs, tmp)
 default: err = errors.New("Unknown Field")
 return
@@ -4649,11 +5230,25 @@ total+=n
 tag = tag >> 3
 switch tag {
 case 0: // v.CommunityPool
+l := codonDecodeUint64(bz, &n, &err)
+	if err != nil {
+		return
+	}
+	bz = bz[n:]
+	total += n
+	if int(l) > len(bz) {
+		err = errors.New("Length Too Large")
+		return
+	}
 var tmp DecCoin
-tmp, n, err = DecodeDecCoin(bz)
+tmp, n, err = DecodeDecCoin(bz[:l])
 if err != nil {return}
 bz = bz[n:]
 total+=n
+if int(l) != n {
+		err = errors.New("Length Mismatch")
+		return
+	}
 v.CommunityPool = append(v.CommunityPool, tmp)
 default: err = errors.New("Unknown Field")
 return
@@ -4728,11 +5323,25 @@ bz = bz[n:]
 total+=n
 v.ToAddress = tmpBz
 case 2: // v.Amount
+l := codonDecodeUint64(bz, &n, &err)
+	if err != nil {
+		return
+	}
+	bz = bz[n:]
+	total += n
+	if int(l) > len(bz) {
+		err = errors.New("Length Too Large")
+		return
+	}
 var tmp Coin
-tmp, n, err = DecodeCoin(bz)
+tmp, n, err = DecodeCoin(bz[:l])
 if err != nil {return}
 bz = bz[n:]
 total+=n
+if int(l) != n {
+		err = errors.New("Length Mismatch")
+		return
+	}
 v.Amount = append(v.Amount, tmp)
 default: err = errors.New("Unknown Field")
 return
@@ -4870,11 +5479,25 @@ total+=n
 tag = tag >> 3
 switch tag {
 case 0: // v.Total
+l := codonDecodeUint64(bz, &n, &err)
+	if err != nil {
+		return
+	}
+	bz = bz[n:]
+	total += n
+	if int(l) > len(bz) {
+		err = errors.New("Length Too Large")
+		return
+	}
 var tmp Coin
-tmp, n, err = DecodeCoin(bz)
+tmp, n, err = DecodeCoin(bz[:l])
 if err != nil {return}
 bz = bz[n:]
 total+=n
+if int(l) != n {
+		err = errors.New("Length Mismatch")
+		return
+	}
 v.Total = append(v.Total, tmp)
 default: err = errors.New("Unknown Field")
 return
@@ -5015,11 +5638,25 @@ if err != nil {return}
 bz = bz[n:]
 total+=n
 case 1: // v.StoreInfos
+l := codonDecodeUint64(bz, &n, &err)
+	if err != nil {
+		return
+	}
+	bz = bz[n:]
+	total += n
+	if int(l) > len(bz) {
+		err = errors.New("Length Too Large")
+		return
+	}
 var tmp StoreInfo
-tmp, n, err = DecodeStoreInfo(bz)
+tmp, n, err = DecodeStoreInfo(bz[:l])
 if err != nil {return}
 bz = bz[n:]
 total+=n
+if int(l) != n {
+		err = errors.New("Length Mismatch")
+		return
+	}
 v.StoreInfos = append(v.StoreInfos, tmp)
 default: err = errors.New("Unknown Field")
 return
@@ -5233,10 +5870,24 @@ bz = bz[n:]
 total+=n
 v.OperatorAddress = tmpBz
 case 1: // v.ConsPubKey
-v.ConsPubKey, n, err = DecodePubKey(bz)
+l := codonDecodeUint64(bz, &n, &err)
+	if err != nil {
+		return
+	}
+	bz = bz[n:]
+	total += n
+	if int(l) > len(bz) {
+		err = errors.New("Length Too Large")
+		return
+	}
+v.ConsPubKey, n, err = DecodePubKey(bz[:l])
 if err != nil {return}
 bz = bz[n:]
 total+=n // interface_decode
+if int(l) != n {
+		err = errors.New("Length Mismatch")
+		return
+	}
 case 2: // v.Jailed
 v.Jailed = bool(codonDecodeBool(bz, &n, &err))
 if err != nil {return}
@@ -5248,15 +5899,43 @@ if err != nil {return}
 bz = bz[n:]
 total+=n
 case 4: // v.Tokens
-v.Tokens, n, err = DecodeInt(bz)
+l := codonDecodeUint64(bz, &n, &err)
+	if err != nil {
+		return
+	}
+	bz = bz[n:]
+	total += n
+	if int(l) > len(bz) {
+		err = errors.New("Length Too Large")
+		return
+	}
+v.Tokens, n, err = DecodeInt(bz[:l])
 if err != nil {return}
 bz = bz[n:]
 total+=n
+if int(l) != n {
+		err = errors.New("Length Mismatch")
+		return
+	}
 case 5: // v.DelegatorShares
-v.DelegatorShares, n, err = DecodeDec(bz)
+l := codonDecodeUint64(bz, &n, &err)
+	if err != nil {
+		return
+	}
+	bz = bz[n:]
+	total += n
+	if int(l) > len(bz) {
+		err = errors.New("Length Too Large")
+		return
+	}
+v.DelegatorShares, n, err = DecodeDec(bz[:l])
 if err != nil {return}
 bz = bz[n:]
 total+=n
+if int(l) != n {
+		err = errors.New("Length Mismatch")
+		return
+	}
 case 6: // v.Description
 l := codonDecodeUint64(bz, &n, &err)
 if err != nil {return}
@@ -5304,10 +5983,24 @@ if err != nil {return}
 bz = bz[n:]
 total+=n
 case 8: // v.UnbondingCompletionTime
-v.UnbondingCompletionTime, n, err = DecodeTime(bz)
+l := codonDecodeUint64(bz, &n, &err)
+	if err != nil {
+		return
+	}
+	bz = bz[n:]
+	total += n
+	if int(l) > len(bz) {
+		err = errors.New("Length Too Large")
+		return
+	}
+v.UnbondingCompletionTime, n, err = DecodeTime(bz[:l])
 if err != nil {return}
 bz = bz[n:]
 total+=n
+if int(l) != n {
+		err = errors.New("Length Mismatch")
+		return
+	}
 case 9: // v.Commission
 l := codonDecodeUint64(bz, &n, &err)
 if err != nil {return}
@@ -5335,20 +6028,62 @@ total+=n
 tag = tag >> 3
 switch tag {
 case 0: // v.Commission.CommissionRates.Rate
-v.Commission.CommissionRates.Rate, n, err = DecodeDec(bz)
+l := codonDecodeUint64(bz, &n, &err)
+	if err != nil {
+		return
+	}
+	bz = bz[n:]
+	total += n
+	if int(l) > len(bz) {
+		err = errors.New("Length Too Large")
+		return
+	}
+v.Commission.CommissionRates.Rate, n, err = DecodeDec(bz[:l])
 if err != nil {return}
 bz = bz[n:]
 total+=n
+if int(l) != n {
+		err = errors.New("Length Mismatch")
+		return
+	}
 case 1: // v.Commission.CommissionRates.MaxRate
-v.Commission.CommissionRates.MaxRate, n, err = DecodeDec(bz)
+l := codonDecodeUint64(bz, &n, &err)
+	if err != nil {
+		return
+	}
+	bz = bz[n:]
+	total += n
+	if int(l) > len(bz) {
+		err = errors.New("Length Too Large")
+		return
+	}
+v.Commission.CommissionRates.MaxRate, n, err = DecodeDec(bz[:l])
 if err != nil {return}
 bz = bz[n:]
 total+=n
+if int(l) != n {
+		err = errors.New("Length Mismatch")
+		return
+	}
 case 2: // v.Commission.CommissionRates.MaxChangeRate
-v.Commission.CommissionRates.MaxChangeRate, n, err = DecodeDec(bz)
+l := codonDecodeUint64(bz, &n, &err)
+	if err != nil {
+		return
+	}
+	bz = bz[n:]
+	total += n
+	if int(l) > len(bz) {
+		err = errors.New("Length Too Large")
+		return
+	}
+v.Commission.CommissionRates.MaxChangeRate, n, err = DecodeDec(bz[:l])
 if err != nil {return}
 bz = bz[n:]
 total+=n
+if int(l) != n {
+		err = errors.New("Length Mismatch")
+		return
+	}
 default: err = errors.New("Unknown Field")
 return
 }
@@ -5358,10 +6093,24 @@ if err != nil {return}
 bz = bz[l:]
 n += int(l)
 case 1: // v.Commission.UpdateTime
-v.Commission.UpdateTime, n, err = DecodeTime(bz)
+l := codonDecodeUint64(bz, &n, &err)
+	if err != nil {
+		return
+	}
+	bz = bz[n:]
+	total += n
+	if int(l) > len(bz) {
+		err = errors.New("Length Too Large")
+		return
+	}
+v.Commission.UpdateTime, n, err = DecodeTime(bz[:l])
 if err != nil {return}
 bz = bz[n:]
 total+=n
+if int(l) != n {
+		err = errors.New("Length Mismatch")
+		return
+	}
 default: err = errors.New("Unknown Field")
 return
 }
@@ -5371,10 +6120,24 @@ if err != nil {return}
 bz = bz[l:]
 n += int(l)
 case 10: // v.MinSelfDelegation
-v.MinSelfDelegation, n, err = DecodeInt(bz)
+l := codonDecodeUint64(bz, &n, &err)
+	if err != nil {
+		return
+	}
+	bz = bz[n:]
+	total += n
+	if int(l) > len(bz) {
+		err = errors.New("Length Too Large")
+		return
+	}
+v.MinSelfDelegation, n, err = DecodeInt(bz[:l])
 if err != nil {return}
 bz = bz[n:]
 total+=n
+if int(l) != n {
+		err = errors.New("Length Mismatch")
+		return
+	}
 default: err = errors.New("Unknown Field")
 return
 }
@@ -5470,10 +6233,24 @@ bz = bz[n:]
 total+=n
 v.ValidatorAddress = tmpBz
 case 2: // v.Shares
-v.Shares, n, err = DecodeDec(bz)
+l := codonDecodeUint64(bz, &n, &err)
+	if err != nil {
+		return
+	}
+	bz = bz[n:]
+	total += n
+	if int(l) > len(bz) {
+		err = errors.New("Length Too Large")
+		return
+	}
+v.Shares, n, err = DecodeDec(bz[:l])
 if err != nil {return}
 bz = bz[n:]
 total+=n
+if int(l) != n {
+		err = errors.New("Length Mismatch")
+		return
+	}
 default: err = errors.New("Unknown Field")
 return
 }
@@ -5569,10 +6346,24 @@ if err != nil {return}
 bz = bz[n:]
 total+=n
 case 1: // v.Stake
-v.Stake, n, err = DecodeDec(bz)
+l := codonDecodeUint64(bz, &n, &err)
+	if err != nil {
+		return
+	}
+	bz = bz[n:]
+	total += n
+	if int(l) > len(bz) {
+		err = errors.New("Length Too Large")
+		return
+	}
+v.Stake, n, err = DecodeDec(bz[:l])
 if err != nil {return}
 bz = bz[n:]
 total+=n
+if int(l) != n {
+		err = errors.New("Length Mismatch")
+		return
+	}
 case 2: // v.Height
 v.Height = uint64(codonDecodeUint64(bz, &n, &err))
 if err != nil {return}
@@ -5624,11 +6415,25 @@ total+=n
 tag = tag >> 3
 switch tag {
 case 0: // v.CumulativeRewardRatio
+l := codonDecodeUint64(bz, &n, &err)
+	if err != nil {
+		return
+	}
+	bz = bz[n:]
+	total += n
+	if int(l) > len(bz) {
+		err = errors.New("Length Too Large")
+		return
+	}
 var tmp DecCoin
-tmp, n, err = DecodeDecCoin(bz)
+tmp, n, err = DecodeDecCoin(bz[:l])
 if err != nil {return}
 bz = bz[n:]
 total+=n
+if int(l) != n {
+		err = errors.New("Length Mismatch")
+		return
+	}
 v.CumulativeRewardRatio = append(v.CumulativeRewardRatio, tmp)
 case 1: // v.ReferenceCount
 v.ReferenceCount = uint16(codonDecodeUint16(bz, &n, &err))
@@ -5695,11 +6500,25 @@ total+=n
 tag = tag >> 3
 switch tag {
 case 0: // v.Rewards
+l := codonDecodeUint64(bz, &n, &err)
+	if err != nil {
+		return
+	}
+	bz = bz[n:]
+	total += n
+	if int(l) > len(bz) {
+		err = errors.New("Length Too Large")
+		return
+	}
 var tmp DecCoin
-tmp, n, err = DecodeDecCoin(bz)
+tmp, n, err = DecodeDecCoin(bz[:l])
 if err != nil {return}
 bz = bz[n:]
 total+=n
+if int(l) != n {
+		err = errors.New("Length Mismatch")
+		return
+	}
 v.Rewards = append(v.Rewards, tmp)
 case 1: // v.Period
 v.Period = uint64(codonDecodeUint64(bz, &n, &err))
@@ -5779,10 +6598,24 @@ if err != nil {return}
 bz = bz[n:]
 total+=n
 case 3: // v.JailedUntil
-v.JailedUntil, n, err = DecodeTime(bz)
+l := codonDecodeUint64(bz, &n, &err)
+	if err != nil {
+		return
+	}
+	bz = bz[n:]
+	total += n
+	if int(l) > len(bz) {
+		err = errors.New("Length Too Large")
+		return
+	}
+v.JailedUntil, n, err = DecodeTime(bz[:l])
 if err != nil {return}
 bz = bz[n:]
 total+=n
+if int(l) != n {
+		err = errors.New("Length Mismatch")
+		return
+	}
 case 4: // v.Tombstoned
 v.Tombstoned = bool(codonDecodeBool(bz, &n, &err))
 if err != nil {return}
@@ -5850,10 +6683,24 @@ if err != nil {return}
 bz = bz[n:]
 total+=n
 case 1: // v.Fraction
-v.Fraction, n, err = DecodeDec(bz)
+l := codonDecodeUint64(bz, &n, &err)
+	if err != nil {
+		return
+	}
+	bz = bz[n:]
+	total += n
+	if int(l) > len(bz) {
+		err = errors.New("Length Too Large")
+		return
+	}
+v.Fraction, n, err = DecodeDec(bz[:l])
 if err != nil {return}
 bz = bz[n:]
 total+=n
+if int(l) != n {
+		err = errors.New("Length Mismatch")
+		return
+	}
 default: err = errors.New("Unknown Field")
 return
 }
@@ -5897,11 +6744,25 @@ total+=n
 tag = tag >> 3
 switch tag {
 case 0:
+l := codonDecodeUint64(bz, &n, &err)
+	if err != nil {
+		return
+	}
+	bz = bz[n:]
+	total += n
+	if int(l) > len(bz) {
+		err = errors.New("Length Too Large")
+		return
+	}
 var tmp DecCoin
-tmp, n, err = DecodeDecCoin(bz)
+tmp, n, err = DecodeDecCoin(bz[:l])
 if err != nil {return}
 bz = bz[n:]
 total+=n
+if int(l) != n {
+		err = errors.New("Length Mismatch")
+		return
+	}
 v = append(v, tmp)
 default: err = errors.New("Unknown Field")
 return
@@ -7686,88 +8547,11 @@ return v, n, nil
 } // end of DecodeAny
 func AssignIfcPtrFromStruct(ifcPtrIn interface{}, structObjIn interface{}) {
 switch ifcPtr := ifcPtrIn.(type) {
-case *ModuleAccountI:
-switch structObj := structObjIn.(type) {
-	case ModuleAccount:
-	*ifcPtr = &structObj
-	default:
-	panic(fmt.Sprintf("Type mismatch %v %v\n", reflect.TypeOf(ifcPtr), reflect.TypeOf(structObjIn)))
-	} // end switch of structs
 case *PrivKey:
 switch structObj := structObjIn.(type) {
 	case PrivKeyEd25519:
 	*ifcPtr = &structObj
 	case PrivKeySecp256k1:
-	*ifcPtr = &structObj
-	default:
-	panic(fmt.Sprintf("Type mismatch %v %v\n", reflect.TypeOf(ifcPtr), reflect.TypeOf(structObjIn)))
-	} // end switch of structs
-case *Account:
-switch structObj := structObjIn.(type) {
-	case ModuleAccount:
-	*ifcPtr = &structObj
-	case BaseAccount:
-	*ifcPtr = &structObj
-	case ContinuousVestingAccount:
-	*ifcPtr = &structObj
-	case DelayedVestingAccount:
-	*ifcPtr = &structObj
-	case BaseVestingAccount:
-	*ifcPtr = &structObj
-	default:
-	panic(fmt.Sprintf("Type mismatch %v %v\n", reflect.TypeOf(ifcPtr), reflect.TypeOf(structObjIn)))
-	} // end switch of structs
-case *PubKey:
-switch structObj := structObjIn.(type) {
-	case PubKeyMultisigThreshold:
-	*ifcPtr = &structObj
-	case PubKeyEd25519:
-	*ifcPtr = &structObj
-	case StdSignature:
-	*ifcPtr = &structObj
-	case PubKeySecp256k1:
-	*ifcPtr = &structObj
-	default:
-	panic(fmt.Sprintf("Type mismatch %v %v\n", reflect.TypeOf(ifcPtr), reflect.TypeOf(structObjIn)))
-	} // end switch of structs
-case *Msg:
-switch structObj := structObjIn.(type) {
-	case MsgBeginRedelegate:
-	*ifcPtr = &structObj
-	case MsgUnjail:
-	*ifcPtr = &structObj
-	case MsgVote:
-	*ifcPtr = &structObj
-	case MsgUndelegate:
-	*ifcPtr = &structObj
-	case MsgMultiSend:
-	*ifcPtr = &structObj
-	case MsgDeposit:
-	*ifcPtr = &structObj
-	case MsgSend:
-	*ifcPtr = &structObj
-	case MsgEditValidator:
-	*ifcPtr = &structObj
-	case MsgVerifyInvariant:
-	*ifcPtr = &structObj
-	case MsgWithdrawDelegatorReward:
-	*ifcPtr = &structObj
-	case MsgDelegate:
-	*ifcPtr = &structObj
-	case MsgSetWithdrawAddress:
-	*ifcPtr = &structObj
-	case MsgWithdrawValidatorCommission:
-	*ifcPtr = &structObj
-	case MsgCreateValidator:
-	*ifcPtr = &structObj
-	default:
-	panic(fmt.Sprintf("Type mismatch %v %v\n", reflect.TypeOf(ifcPtr), reflect.TypeOf(structObjIn)))
-	} // end switch of structs
-case *VestingAccount:
-switch structObj := structObjIn.(type) {
-	case ContinuousVestingAccount:
-	*ifcPtr = &structObj
-	case DelayedVestingAccount:
 	*ifcPtr = &structObj
 	default:
 	panic(fmt.Sprintf("Type mismatch %v %v\n", reflect.TypeOf(ifcPtr), reflect.TypeOf(structObjIn)))
@@ -7785,6 +8569,21 @@ switch structObj := structObjIn.(type) {
 	default:
 	panic(fmt.Sprintf("Type mismatch %v %v\n", reflect.TypeOf(ifcPtr), reflect.TypeOf(structObjIn)))
 	} // end switch of structs
+case *Account:
+switch structObj := structObjIn.(type) {
+	case ModuleAccount:
+	*ifcPtr = &structObj
+	case BaseVestingAccount:
+	*ifcPtr = &structObj
+	case ContinuousVestingAccount:
+	*ifcPtr = &structObj
+	case BaseAccount:
+	*ifcPtr = &structObj
+	case DelayedVestingAccount:
+	*ifcPtr = &structObj
+	default:
+	panic(fmt.Sprintf("Type mismatch %v %v\n", reflect.TypeOf(ifcPtr), reflect.TypeOf(structObjIn)))
+	} // end switch of structs
 case *Tx:
 switch structObj := structObjIn.(type) {
 	case StdTx:
@@ -7792,9 +8591,71 @@ switch structObj := structObjIn.(type) {
 	default:
 	panic(fmt.Sprintf("Type mismatch %v %v\n", reflect.TypeOf(ifcPtr), reflect.TypeOf(structObjIn)))
 	} // end switch of structs
+case *PubKey:
+switch structObj := structObjIn.(type) {
+	case PubKeyMultisigThreshold:
+	*ifcPtr = &structObj
+	case StdSignature:
+	*ifcPtr = &structObj
+	case PubKeySecp256k1:
+	*ifcPtr = &structObj
+	case PubKeyEd25519:
+	*ifcPtr = &structObj
+	default:
+	panic(fmt.Sprintf("Type mismatch %v %v\n", reflect.TypeOf(ifcPtr), reflect.TypeOf(structObjIn)))
+	} // end switch of structs
+case *VestingAccount:
+switch structObj := structObjIn.(type) {
+	case ContinuousVestingAccount:
+	*ifcPtr = &structObj
+	case DelayedVestingAccount:
+	*ifcPtr = &structObj
+	default:
+	panic(fmt.Sprintf("Type mismatch %v %v\n", reflect.TypeOf(ifcPtr), reflect.TypeOf(structObjIn)))
+	} // end switch of structs
+case *ModuleAccountI:
+switch structObj := structObjIn.(type) {
+	case ModuleAccount:
+	*ifcPtr = &structObj
+	default:
+	panic(fmt.Sprintf("Type mismatch %v %v\n", reflect.TypeOf(ifcPtr), reflect.TypeOf(structObjIn)))
+	} // end switch of structs
 case *SupplyI:
 switch structObj := structObjIn.(type) {
 	case Supply:
+	*ifcPtr = &structObj
+	default:
+	panic(fmt.Sprintf("Type mismatch %v %v\n", reflect.TypeOf(ifcPtr), reflect.TypeOf(structObjIn)))
+	} // end switch of structs
+case *Msg:
+switch structObj := structObjIn.(type) {
+	case MsgWithdrawDelegatorReward:
+	*ifcPtr = &structObj
+	case MsgSend:
+	*ifcPtr = &structObj
+	case MsgUnjail:
+	*ifcPtr = &structObj
+	case MsgVote:
+	*ifcPtr = &structObj
+	case MsgEditValidator:
+	*ifcPtr = &structObj
+	case MsgUndelegate:
+	*ifcPtr = &structObj
+	case MsgWithdrawValidatorCommission:
+	*ifcPtr = &structObj
+	case MsgBeginRedelegate:
+	*ifcPtr = &structObj
+	case MsgMultiSend:
+	*ifcPtr = &structObj
+	case MsgVerifyInvariant:
+	*ifcPtr = &structObj
+	case MsgCreateValidator:
+	*ifcPtr = &structObj
+	case MsgDelegate:
+	*ifcPtr = &structObj
+	case MsgSetWithdrawAddress:
+	*ifcPtr = &structObj
+	case MsgDeposit:
 	*ifcPtr = &structObj
 	default:
 	panic(fmt.Sprintf("Type mismatch %v %v\n", reflect.TypeOf(ifcPtr), reflect.TypeOf(structObjIn)))
