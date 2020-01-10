@@ -10,8 +10,8 @@ import (
 	amino "github.com/tendermint/go-amino"
 
 	"github.com/coinexchain/codon"
-	codoncdc "github.com/cosmos/cosmos-sdk/codongen/codec"
 	"github.com/coinexchain/randsrc"
+	codoncdc "github.com/cosmos/cosmos-sdk/codongen/codec"
 )
 
 var Count = 100 * 10000
@@ -87,4 +87,3 @@ func findMismatch(a, b []byte) int {
 	}
 	return -1
 }
-

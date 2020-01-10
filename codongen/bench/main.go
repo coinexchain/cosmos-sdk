@@ -9,8 +9,8 @@ import (
 
 	"github.com/cosmos/cosmos-sdk/codec"
 
-	codoncdc "github.com/cosmos/cosmos-sdk/codongen/codec"
 	"github.com/coinexchain/randsrc"
+	codoncdc "github.com/cosmos/cosmos-sdk/codongen/codec"
 )
 
 func main() {
@@ -105,4 +105,3 @@ func runBench(r codoncdc.RandSrc) {
 	span = time.Now().UnixNano() - nanoSecCount
 	fmt.Printf("Codon: time = %d, bytes = %d, bytes/ns = %f\n", span, totalBytes, float64(totalBytes)/float64(span))
 }
-
