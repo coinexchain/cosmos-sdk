@@ -1,0 +1,411 @@
+syntax = "proto3";
+
+message AccAddress {
+    bytes AccAddress_var = 1;
+}
+message BaseAccount {
+    bytes Address = 1;
+    repeated Coin Coins = 2;
+    PubKey PubKey = 3;
+    uint64 AccountNumber = 4;
+    uint64 Sequence = 5;
+} // BaseAccount
+
+message BaseVestingAccount {
+    BaseAccount BaseAccount = 1;
+    repeated Coin OriginalVesting = 2;
+    repeated Coin DelegatedFree = 3;
+    repeated Coin DelegatedVesting = 4;
+    int64 EndTime = 5;
+} // BaseVestingAccount
+
+message BlockID {
+    bytes Hash = 1;
+    PartSetHeader PartsHeader = 2;
+} // BlockID
+
+message BondStatus {
+    uint32 BondStatus_var = 1;
+}
+message Coin {
+    string Denom = 1;
+    bytes Amount = 2;
+} // Coin
+
+message Commission {
+    CommissionRates CommissionRates = 1;
+    bytes UpdateTime = 2;
+} // Commission
+
+message CommissionRates {
+    bytes Rate = 1;
+    bytes MaxRate = 2;
+    bytes MaxChangeRate = 3;
+} // CommissionRates
+
+message CommitID {
+    int64 Version = 1;
+    bytes Hash = 2;
+} // CommitID
+
+message CommunityPoolSpendProposal {
+    string Title = 1;
+    string Description = 2;
+    bytes Recipient = 3;
+    repeated Coin Amount = 4;
+} // CommunityPoolSpendProposal
+
+message ConsAddress {
+    bytes ConsAddress_var = 1;
+}
+message ContinuousVestingAccount {
+    BaseVestingAccount BaseVestingAccount = 1;
+    int64 StartTime = 2;
+} // ContinuousVestingAccount
+
+message DecCoin {
+    string Denom = 1;
+    bytes Amount = 2;
+} // DecCoin
+
+// DecCoins is ignored (slice of types.DecCoin)
+message DelayedVestingAccount {
+    BaseVestingAccount BaseVestingAccount = 1;
+} // DelayedVestingAccount
+
+message Delegation {
+    bytes DelegatorAddress = 1;
+    bytes ValidatorAddress = 2;
+    bytes Shares = 3;
+} // Delegation
+
+message DelegatorStartingInfo {
+    uint64 PreviousPeriod = 1;
+    bytes Stake = 2;
+    uint64 Height = 3;
+} // DelegatorStartingInfo
+
+message Description {
+    string Moniker = 1;
+    string Identity = 2;
+    string Website = 3;
+    string Details = 4;
+} // Description
+
+message FeePool {
+    repeated DecCoin CommunityPool = 1;
+} // FeePool
+
+message Input {
+    bytes Address = 1;
+    repeated Coin Coins = 2;
+} // Input
+
+message ModuleAccount {
+    BaseAccount BaseAccount = 1;
+    string Name = 2;
+    repeated string Permissions = 3;
+} // ModuleAccount
+
+message MsgBeginRedelegate {
+    bytes DelegatorAddress = 1;
+    bytes ValidatorSrcAddress = 2;
+    bytes ValidatorDstAddress = 3;
+    Coin Amount = 4;
+} // MsgBeginRedelegate
+
+message MsgCreateValidator {
+    Description Description = 1;
+    CommissionRates Commission = 2;
+    bytes MinSelfDelegation = 3;
+    bytes DelegatorAddress = 4;
+    bytes ValidatorAddress = 5;
+    PubKey PubKey = 6;
+    Coin Value = 7;
+} // MsgCreateValidator
+
+message MsgDelegate {
+    bytes DelegatorAddress = 1;
+    bytes ValidatorAddress = 2;
+    Coin Amount = 3;
+} // MsgDelegate
+
+message MsgDeposit {
+    uint64 ProposalID = 1;
+    bytes Depositor = 2;
+    repeated Coin Amount = 3;
+} // MsgDeposit
+
+message MsgEditValidator {
+    Description Description = 1;
+    bytes ValidatorAddress = 2;
+    bytes CommissionRate = 3;
+    bytes MinSelfDelegation = 4;
+} // MsgEditValidator
+
+message MsgMultiSend {
+    repeated Input Inputs = 1;
+    repeated Output Outputs = 2;
+} // MsgMultiSend
+
+message MsgSend {
+    bytes FromAddress = 1;
+    bytes ToAddress = 2;
+    repeated Coin Amount = 3;
+} // MsgSend
+
+message MsgSetWithdrawAddress {
+    bytes DelegatorAddress = 1;
+    bytes WithdrawAddress = 2;
+} // MsgSetWithdrawAddress
+
+message MsgUndelegate {
+    bytes DelegatorAddress = 1;
+    bytes ValidatorAddress = 2;
+    Coin Amount = 3;
+} // MsgUndelegate
+
+message MsgUnjail {
+    bytes ValidatorAddr = 1;
+} // MsgUnjail
+
+message MsgVerifyInvariant {
+    bytes Sender = 1;
+    string InvariantModuleName = 2;
+    string InvariantRoute = 3;
+} // MsgVerifyInvariant
+
+message MsgVote {
+    uint64 ProposalID = 1;
+    bytes Voter = 2;
+    uint32 Option = 3;
+} // MsgVote
+
+message MsgWithdrawDelegatorReward {
+    bytes DelegatorAddress = 1;
+    bytes ValidatorAddress = 2;
+} // MsgWithdrawDelegatorReward
+
+message MsgWithdrawValidatorCommission {
+    bytes ValidatorAddress = 1;
+} // MsgWithdrawValidatorCommission
+
+message Output {
+    bytes Address = 1;
+    repeated Coin Coins = 2;
+} // Output
+
+message ParamChange {
+    string Subspace = 1;
+    string Key = 2;
+    string Subkey = 3;
+    string Value = 4;
+} // ParamChange
+
+message ParameterChangeProposal {
+    string Title = 1;
+    string Description = 2;
+    repeated ParamChange Changes = 3;
+} // ParameterChangeProposal
+
+message PartSetHeader {
+    int64 Total = 1;
+    bytes Hash = 2;
+} // PartSetHeader
+
+message PrivKeyEd25519 {
+    bytes PrivKeyEd25519_var = 1;
+}
+message PrivKeySecp256k1 {
+    bytes PrivKeySecp256k1_var = 1;
+}
+message PubKeyEd25519 {
+    bytes PubKeyEd25519_var = 1;
+}
+message PubKeyMultisigThreshold {
+    uint64 K = 1;
+    repeated PubKey PubKeys = 2;
+} // PubKeyMultisigThreshold
+
+message PubKeySecp256k1 {
+    bytes PubKeySecp256k1_var = 1;
+}
+message SignedMsgType {
+    uint32 SignedMsgType_var = 1;
+}
+message SoftwareUpgradeProposal {
+    string Title = 1;
+    string Description = 2;
+} // SoftwareUpgradeProposal
+
+message StdFee {
+    repeated Coin Amount = 1;
+    uint64 Gas = 2;
+} // StdFee
+
+message StdSignature {
+    PubKey PubKey = 1;
+    bytes Signature = 2;
+} // StdSignature
+
+message StdTx {
+    repeated Msg Msgs = 1;
+    StdFee Fee = 2;
+    repeated StdSignature Signatures = 3;
+    string Memo = 4;
+} // StdTx
+
+message Supply {
+    repeated Coin Total = 1;
+} // Supply
+
+message TextProposal {
+    string Title = 1;
+    string Description = 2;
+} // TextProposal
+
+message ValAddress {
+    bytes ValAddress_var = 1;
+}
+message Validator {
+    bytes OperatorAddress = 1;
+    PubKey ConsPubKey = 2;
+    bool Jailed = 3;
+    uint32 Status = 4;
+    bytes Tokens = 5;
+    bytes DelegatorShares = 6;
+    Description Description = 7;
+    int64 UnbondingHeight = 8;
+    bytes UnbondingCompletionTime = 9;
+    Commission Commission = 10;
+    bytes MinSelfDelegation = 11;
+} // Validator
+
+message ValidatorCurrentRewards {
+    repeated DecCoin Rewards = 1;
+    uint64 Period = 2;
+} // ValidatorCurrentRewards
+
+message ValidatorHistoricalRewards {
+    repeated DecCoin CumulativeRewardRatio = 1;
+    uint32 ReferenceCount = 2;
+} // ValidatorHistoricalRewards
+
+message ValidatorSigningInfo {
+    bytes Address = 1;
+    int64 StartHeight = 2;
+    int64 IndexOffset = 3;
+    bytes JailedUntil = 4;
+    bool Tombstoned = 5;
+    int64 MissedBlocksCounter = 6;
+} // ValidatorSigningInfo
+
+message ValidatorSlashEvent {
+    uint64 ValidatorPeriod = 1;
+    bytes Fraction = 2;
+} // ValidatorSlashEvent
+
+message Vote {
+    uint32 Type = 1;
+    int64 Height = 2;
+    int64 Round = 3;
+    BlockID BlockID = 4;
+    bytes Timestamp = 5;
+    bytes ValidatorAddress = 6;
+    int64 ValidatorIndex = 7;
+    bytes Signature = 8;
+} // Vote
+
+message VoteOption {
+    uint32 VoteOption_var = 1;
+}
+message commitInfo {
+    int64 Version = 1;
+    repeated storeInfo StoreInfos = 2;
+} // commitInfo
+
+message int64 {
+    int64 int64_var = 1;
+}
+message storeCore {
+    CommitID CommitID = 1;
+} // storeCore
+
+message storeInfo {
+    string Name = 1;
+    storeCore Core = 2;
+} // storeInfo
+
+message uint64 {
+    uint64 uint64_var = 1;
+}
+message Msg {
+    oneof Msg_impl {
+        MsgSetWithdrawAddress MsgSetWithdrawAddress_var = 73614168;
+        MsgUndelegate MsgUndelegate_var = 479724980;
+        MsgSend MsgSend_var = 31944689;
+        MsgBeginRedelegate MsgBeginRedelegate_var = 241505485;
+        MsgWithdrawDelegatorReward MsgWithdrawDelegatorReward_var = 23904706;
+        MsgDeposit MsgDeposit_var = 402428987;
+        MsgVote MsgVote_var = 314113032;
+        MsgVerifyInvariant MsgVerifyInvariant_var = 121564406;
+        MsgMultiSend MsgMultiSend_var = 167957709;
+        MsgDelegate MsgDelegate_var = 106121128;
+        MsgEditValidator MsgEditValidator_var = 502447547;
+        MsgUnjail MsgUnjail_var = 261008494;
+        MsgWithdrawValidatorCommission MsgWithdrawValidatorCommission_var = 514264249;
+        MsgCreateValidator MsgCreateValidator_var = 374726888;
+    }
+}
+message Tx {
+    oneof Tx_impl {
+        StdTx StdTx_var = 420461272;
+    }
+}
+message Account {
+    oneof Account_impl {
+        BaseAccount BaseAccount_var = 26591049;
+        ContinuousVestingAccount ContinuousVestingAccount_var = 82892118;
+        BaseVestingAccount BaseVestingAccount_var = 351017031;
+        DelayedVestingAccount DelayedVestingAccount_var = 12374068;
+        ModuleAccount ModuleAccount_var = 321193714;
+    }
+}
+message VestingAccount {
+    oneof VestingAccount_impl {
+        DelayedVestingAccount DelayedVestingAccount_var = 12374068;
+        ContinuousVestingAccount ContinuousVestingAccount_var = 82892118;
+    }
+}
+message Content {
+    oneof Content_impl {
+        SoftwareUpgradeProposal SoftwareUpgradeProposal_var = 261665006;
+        ParameterChangeProposal ParameterChangeProposal_var = 84061114;
+        CommunityPoolSpendProposal CommunityPoolSpendProposal_var = 23847857;
+        TextProposal TextProposal_var = 458846397;
+    }
+}
+message ModuleAccountI {
+    oneof ModuleAccountI_impl {
+        ModuleAccount ModuleAccount_var = 321193714;
+    }
+}
+message SupplyI {
+    oneof SupplyI_impl {
+        Supply Supply_var = 288082478;
+    }
+}
+message PrivKey {
+    oneof PrivKey_impl {
+        PrivKeyEd25519 PrivKeyEd25519_var = 454630091;
+        PrivKeySecp256k1 PrivKeySecp256k1_var = 252074570;
+    }
+}
+message PubKey {
+    oneof PubKey_impl {
+        PubKeyEd25519 PubKeyEd25519_var = 32929284;
+        PubKeySecp256k1 PubKeySecp256k1_var = 45700893;
+        PubKeyMultisigThreshold PubKeyMultisigThreshold_var = 471601077;
+        StdSignature StdSignature_var = 496135554;
+    }
+}
