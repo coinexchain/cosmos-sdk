@@ -23,6 +23,8 @@ import (
 	sdk "github.com/cosmos/cosmos-sdk/types"
 )
 
+var GenesisBlockHeight = int64(10)
+
 // Key to store the consensus params in the main store.
 var mainConsensusParamsKey = []byte("consensus_params")
 
@@ -221,7 +223,8 @@ func (app *BaseApp) LastCommitID() sdk.CommitID {
 
 // LastBlockHeight returns the last committed block height.
 func (app *BaseApp) LastBlockHeight() int64 {
-	return app.cms.LastCommitID().Version
+	h := app.cms.LastCommitID().Version
+	return h + GenesisBlockHeight
 }
 
 // initializes the remaining logic from app.cms
@@ -355,7 +358,7 @@ func (app *BaseApp) Info(req abci.RequestInfo) abci.ResponseInfo {
 
 	return abci.ResponseInfo{
 		Data:             app.name,
-		LastBlockHeight:  lastCommitID.Version,
+		LastBlockHeight:  lastCommitID.Version + GenesisBlockHeight,
 		LastBlockAppHash: lastCommitID.Hash,
 	}
 }
