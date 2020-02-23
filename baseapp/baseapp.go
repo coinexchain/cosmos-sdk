@@ -16,14 +16,13 @@ import (
 	abci "github.com/tendermint/tendermint/abci/types"
 	"github.com/tendermint/tendermint/crypto/tmhash"
 	"github.com/tendermint/tendermint/libs/log"
+	"github.com/tendermint/tendermint/types"
 	dbm "github.com/tendermint/tm-db"
 
 	"github.com/cosmos/cosmos-sdk/codec"
 	"github.com/cosmos/cosmos-sdk/store"
 	sdk "github.com/cosmos/cosmos-sdk/types"
 )
-
-var GenesisBlockHeight = int64(10)
 
 // Key to store the consensus params in the main store.
 var mainConsensusParamsKey = []byte("consensus_params")
@@ -224,7 +223,7 @@ func (app *BaseApp) LastCommitID() sdk.CommitID {
 // LastBlockHeight returns the last committed block height.
 func (app *BaseApp) LastBlockHeight() int64 {
 	h := app.cms.LastCommitID().Version
-	return h + GenesisBlockHeight
+	return h + types.GenesisBlockHeight
 }
 
 // initializes the remaining logic from app.cms
@@ -358,7 +357,7 @@ func (app *BaseApp) Info(req abci.RequestInfo) abci.ResponseInfo {
 
 	return abci.ResponseInfo{
 		Data:             app.name,
-		LastBlockHeight:  lastCommitID.Version + GenesisBlockHeight,
+		LastBlockHeight:  lastCommitID.Version + types.GenesisBlockHeight,
 		LastBlockAppHash: lastCommitID.Hash,
 	}
 }

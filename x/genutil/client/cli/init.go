@@ -73,6 +73,7 @@ func InitCmd(ctx *server.Context, cdc *codec.Codec, mbm module.BasicManager,
 			if chainID == "" {
 				chainID = fmt.Sprintf("test-chain-%v", common.RandStr(6))
 			}
+			config.GenesisBlockHeight = viper.GetInt64(cli.GenesisBlockHeight)
 
 			nodeID, _, err := genutil.InitializeNodeValidatorFiles(config)
 			if err != nil {
@@ -117,6 +118,7 @@ func InitCmd(ctx *server.Context, cdc *codec.Codec, mbm module.BasicManager,
 	}
 
 	cmd.Flags().String(cli.HomeFlag, defaultNodeHome, "node's home directory")
+	cmd.Flags().Int64(cli.GenesisBlockHeight, 0, "node's genesis block height")
 	cmd.Flags().BoolP(flagOverwrite, "o", false, "overwrite the genesis.json file")
 	cmd.Flags().String(client.FlagChainID, "", "genesis file chain-id, if left blank will be randomly created")
 
