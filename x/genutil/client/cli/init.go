@@ -74,6 +74,7 @@ func InitCmd(ctx *server.Context, cdc *codec.Codec, mbm module.BasicManager,
 				chainID = fmt.Sprintf("test-chain-%v", common.RandStr(6))
 			}
 
+
 			nodeID, _, err := genutil.InitializeNodeValidatorFiles(config)
 			if err != nil {
 				return err

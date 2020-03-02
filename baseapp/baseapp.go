@@ -17,6 +17,7 @@ import (
 	abci "github.com/tendermint/tendermint/abci/types"
 	"github.com/tendermint/tendermint/crypto/tmhash"
 	"github.com/tendermint/tendermint/libs/log"
+	"github.com/tendermint/tendermint/types"
 	dbm "github.com/tendermint/tm-db"
 
 	"github.com/cosmos/cosmos-sdk/codec"
@@ -229,7 +230,8 @@ func (app *BaseApp) LastCommitID() sdk.CommitID {
 
 // LastBlockHeight returns the last committed block height.
 func (app *BaseApp) LastBlockHeight() int64 {
-	return app.cms.LastCommitID().Version
+	h := app.cms.LastCommitID().Version
+	return h + types.GenesisBlockHeight
 }
 
 // initializes the remaining logic from app.cms
@@ -367,7 +369,7 @@ func (app *BaseApp) Info(req abci.RequestInfo) abci.ResponseInfo {
 
 	return abci.ResponseInfo{
 		Data:             app.name,
-		LastBlockHeight:  lastCommitID.Version,
+		LastBlockHeight:  lastCommitID.Version + types.GenesisBlockHeight,
 		LastBlockAppHash: lastCommitID.Hash,
 	}
 }
