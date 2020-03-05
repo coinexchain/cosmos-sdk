@@ -216,6 +216,7 @@ func (app *BaseApp) LoadLatestVersion(baseKey *sdk.KVStoreKey) error {
 // LoadVersion loads the BaseApp application version. It will panic if called
 // more than once on a running baseapp.
 func (app *BaseApp) LoadVersion(version int64, baseKey *sdk.KVStoreKey) error {
+	version = version - types.GenesisBlockHeight
 	err := app.cms.LoadVersion(version)
 	if err != nil {
 		return err
@@ -535,12 +536,14 @@ func handleQueryStore(app *BaseApp, path []string, req abci.RequestQuery) abci.R
 		req.Height = app.LastBlockHeight()
 	}
 
-	if req.Height <= 1 && req.Prove {
-		return sdk.ErrInternal("cannot query with proof when height <= 1; please provide a valid height").QueryResult()
+	if req.Height <= types.GenesisBlockHeight+1 && req.Prove {
+		return sdk.ErrInternal(fmt.Sprintf("cannot query with proof when height <= %d; please provide a valid height", types.GenesisBlockHeight+1)).QueryResult()
 	}
 
+	height := req.Height
+	req.Height = req.Height - types.GenesisBlockHeight
 	resp := queryable.Query(req)
-	resp.Height = req.Height
+	resp.Height = height
 
 	return resp
 }
@@ -589,11 +592,11 @@ func handleQueryCustom(app *BaseApp, path []string, req abci.RequestQuery) (res 
 		req.Height = app.LastBlockHeight()
 	}
 
-	if req.Height <= 1 && req.Prove {
-		return sdk.ErrInternal("cannot query with proof when height <= 1; please provide a valid height").QueryResult()
+	if req.Height <= types.GenesisBlockHeight+1 && req.Prove {
+		return sdk.ErrInternal(fmt.Sprintf("cannot query with proof when height <= %d; please provide a valid height", types.GenesisBlockHeight+1)).QueryResult()
 	}
 
-	cacheMS, err := app.cms.CacheMultiStoreWithVersion(req.Height)
+	cacheMS, err := app.cms.CacheMultiStoreWithVersion(req.Height - types.GenesisBlockHeight)
 	if err != nil {
 		return sdk.ErrInternal(
 			fmt.Sprintf(
