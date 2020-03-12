@@ -30,4 +30,4 @@ require (
 	gopkg.in/yaml.v2 v2.2.7
 )
 
-replace github.com/tendermint/tendermint => github.com/coinexchain/tendermint v0.32.900
+replace github.com/tendermint/tendermint => github.com/coinexchain/tendermint v0.32.901

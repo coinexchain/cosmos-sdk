@@ -2,6 +2,7 @@ package server
 
 import (
 	"encoding/json"
+	"github.com/tendermint/tendermint/types"
 	"net"
 	"os"
 	"os/signal"
@@ -81,6 +82,7 @@ func interceptLoadConfig() (conf *cfg.Config, err error) {
 		// TODO: Handle with #870
 		panic(err)
 	}
+	types.GenesisBlockHeight = tmpConf.GenesisBlockHeight
 	rootDir := tmpConf.RootDir
 	configFilePath := filepath.Join(rootDir, "config/config.toml")
 	// Intercept only if the file doesn't already exist
