@@ -390,7 +390,7 @@ func (app *BaseApp) InitChain(req abci.RequestInitChain) (res abci.ResponseInitC
 		app.storeConsensusParams(req.ConsensusParams)
 	}
 
-	initHeader := abci.Header{ChainID: req.ChainId, Time: req.Time}
+	initHeader := abci.Header{ChainID: req.ChainId, Time: req.Time, Height: types.GenesisBlockHeight}
 
 	// initialize the deliver state and check state with a correct header
 	app.setDeliverState(initHeader)
