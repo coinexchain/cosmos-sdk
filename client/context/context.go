@@ -106,7 +106,7 @@ func NewCLIContext() CLIContext { return NewCLIContextWithFrom(viper.GetString(f
 
 func createVerifier() tmlite.Verifier {
 	trustNodeDefined := viper.IsSet(flags.FlagTrustNode)
-	if !trustNodeDefined {
+	if trustNodeDefined {
 		return nil
 	}
 
