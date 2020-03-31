@@ -49,7 +49,7 @@ func getBlock(cliCtx context.CLIContext, height *int64) ([]byte, error) {
 
 	if !cliCtx.TrustNode {
 		if res != nil {
-			if res.BlockMeta != nil && res.Block != nil {
+			if res.BlockMeta != nil && res.Block != nil && cliCtx.Verifier != nil {
 
 				check, err := cliCtx.Verify(res.Block.Height)
 				if err != nil {

@@ -126,7 +126,7 @@ func GetValidators(cliCtx context.CLIContext, height *int64) (ResultValidatorsOu
 		return ResultValidatorsOutput{}, err
 	}
 
-	if !cliCtx.TrustNode {
+	if !cliCtx.TrustNode && cliCtx.Verifier != nil {
 		check, err := cliCtx.Verify(validatorsRes.BlockHeight)
 		if err != nil {
 			return ResultValidatorsOutput{}, err

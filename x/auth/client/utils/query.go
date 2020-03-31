@@ -47,7 +47,7 @@ func QueryTxsByEvents(cliCtx context.CLIContext, events []string, page, limit in
 		return nil, err
 	}
 
-	if prove {
+	if prove && cliCtx.Verifier != nil {
 		for _, tx := range resTxs.Txs {
 			err := ValidateTxResult(cliCtx, tx)
 			if err != nil {
@@ -89,7 +89,7 @@ func QueryTx(cliCtx context.CLIContext, hashHexStr string) (sdk.TxResponse, erro
 		return sdk.TxResponse{}, err
 	}
 
-	if !cliCtx.TrustNode {
+	if !cliCtx.TrustNode && cliCtx.Verifier != nil {
 		if err = ValidateTxResult(cliCtx, resTx); err != nil {
 			return sdk.TxResponse{}, err
 		}
