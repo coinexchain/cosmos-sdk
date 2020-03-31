@@ -48,19 +48,24 @@ func getBlock(cliCtx context.CLIContext, height *int64) ([]byte, error) {
 	}
 
 	if !cliCtx.TrustNode {
-		check, err := cliCtx.Verify(res.Block.Height)
-		if err != nil {
-			return nil, err
-		}
+		if res != nil {
+			if res.BlockMeta != nil && res.Block != nil {
 
-		err = tmliteProxy.ValidateBlockMeta(res.BlockMeta, check)
-		if err != nil {
-			return nil, err
-		}
+				check, err := cliCtx.Verify(res.Block.Height)
+				if err != nil {
+					return nil, err
+				}
 
-		err = tmliteProxy.ValidateBlock(res.Block, check)
-		if err != nil {
-			return nil, err
+				err = tmliteProxy.ValidateBlockMeta(res.BlockMeta, check)
+				if err != nil {
+					return nil, err
+				}
+
+				err = tmliteProxy.ValidateBlock(res.Block, check)
+				if err != nil {
+					return nil, err
+				}
+			}
 		}
 	}
 
