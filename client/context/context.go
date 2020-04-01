@@ -6,6 +6,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/pkg/errors"
 	"github.com/spf13/viper"
@@ -53,6 +54,15 @@ type CLIContext struct {
 	SkipConfirm   bool
 }
 
+func fixNodeURI(nodeURI string) string {
+
+	slash := strings.Index(nodeURI, "/")
+	if slash < 0 {
+		nodeURI = fmt.Sprintf("%s%s", "//", nodeURI)
+	}
+	return nodeURI
+}
+
 // NewCLIContextWithFrom returns a new initialized CLIContext with parameters from the
 // command line using Viper. It takes a key name or address and populates the FromName and
 // FromAddress field accordingly.
@@ -69,8 +79,8 @@ func NewCLIContextWithFrom(from string) CLIContext {
 
 	if !genOnly {
 		nodeURI = viper.GetString(flags.FlagNode)
-		nodeURI = fmt.Sprintf("%s%s", "//", nodeURI)
 		if nodeURI != "" {
+			nodeURI = fixNodeURI(nodeURI)
 			rpc = rpcclient.NewHTTP(nodeURI, "/websocket")
 		}
 	}
