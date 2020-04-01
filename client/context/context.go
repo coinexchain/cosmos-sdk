@@ -69,6 +69,7 @@ func NewCLIContextWithFrom(from string) CLIContext {
 
 	if !genOnly {
 		nodeURI = viper.GetString(flags.FlagNode)
+		nodeURI = fmt.Sprintf("%s%s", "//", nodeURI)
 		if nodeURI != "" {
 			rpc = rpcclient.NewHTTP(nodeURI, "/websocket")
 		}
