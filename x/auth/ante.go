@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/hex"
 	"fmt"
+	tmtypes "github.com/tendermint/tendermint/types"
 
 	"github.com/tendermint/tendermint/crypto/ed25519"
 
@@ -108,7 +109,7 @@ func NewAnteHandler(ak AccountKeeper, supplyKeeper types.SupplyKeeper, sigGasCon
 		// When simulating, this would just be a 0-length slice.
 		signerAddrs := stdTx.GetSigners()
 		signerAccs := make([]Account, len(signerAddrs))
-		isGenesis := ctx.BlockHeight() == 0
+		isGenesis := ctx.BlockHeight() == tmtypes.GenesisBlockHeight
 
 		// fetch first signer, who's going to pay the fees
 		signerAccs[0], res = GetSignerAcc(newCtx, ak, signerAddrs[0])
@@ -401,7 +402,7 @@ func EnsureSufficientMempoolFees(ctx sdk.Context, stdFee StdFee) sdk.Result {
 func SetGasMeter(simulate bool, ctx sdk.Context, gasLimit uint64) sdk.Context {
 	// In various cases such as simulation and during the genesis block, we do not
 	// meter any gas utilization.
-	if simulate || ctx.BlockHeight() == 0 {
+	if simulate || ctx.BlockHeight() == tmtypes.GenesisBlockHeight {
 		return ctx.WithGasMeter(sdk.NewInfiniteGasMeter())
 	}
 
