@@ -49,6 +49,12 @@ func (ctx CLIContext) QueryStore(key tmbytes.HexBytes, storeName string) ([]byte
 	return ctx.queryStore(key, storeName, "key")
 }
 
+// QueryStoreWithProof is the same as QueryStore, except with proof returned when proof is verified
+func (ctx CLIContext) QueryStoreWithProof(key tmbytes.HexBytes, storeName string) ([]byte, *merkle.Proof, int64, error) {
+	path := fmt.Sprintf("/store/%s/%s", storeName, "key")
+	return ctx.queryWithProof(path, key)
+}
+
 // QuerySubspace performs a query to a Tendermint node with the provided
 // store name and subspace. It returns key value pair and height of the query
 // upon success or an error if the query fails.
@@ -109,6 +115,41 @@ func (ctx CLIContext) query(path string, key tmbytes.HexBytes) (res []byte, heig
 	}
 
 	return resp.Value, resp.Height, nil
+}
+
+// queryWithProof is the same as query, except with proof returned when proof is verified
+func (ctx CLIContext) queryWithProof(path string, key tmbytes.HexBytes) (res []byte, proof *merkle.Proof, height int64, err error) {
+	node, err := ctx.GetNode()
+	if err != nil {
+		return res, nil, height, err
+	}
+
+	opts := rpcclient.ABCIQueryOptions{
+		Height: ctx.Height,
+		Prove:  !ctx.TrustNode,
+	}
+
+	result, err := node.ABCIQueryWithOptions(path, key, opts)
+	if err != nil {
+		return res, nil, height, err
+	}
+
+	resp := result.Response
+	if !resp.IsOK() {
+		return res, nil, resp.Height, errors.New(resp.Log)
+	}
+
+	// data from trusted node or subspace query doesn't need verification
+	if ctx.TrustNode || !isQueryStoreWithProof(path) {
+		return resp.Value, nil, resp.Height, nil
+	}
+
+	err = ctx.verifyProof(path, resp)
+	if err != nil {
+		return res, nil, resp.Height, err
+	}
+
+	return resp.Value, resp.Proof, resp.Height, nil
 }
 
 // Verify verifies the consensus proof at given height.

@@ -8,7 +8,7 @@ import (
 	"math/big"
 )
 
-const maxBitLen = 255+64
+const maxBitLen = 255 + 64
 
 func newIntegerFromString(s string) (*big.Int, bool) {
 	return new(big.Int).SetString(s, 0)
